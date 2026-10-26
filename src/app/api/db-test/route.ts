@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 
@@ -17,7 +18,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        message: "Could not connect to the database. Check the server terminal.",
+        message: "Could not connect to the database.",
       },
       { status: 500 }
     );
