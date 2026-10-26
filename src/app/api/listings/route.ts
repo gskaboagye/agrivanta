@@ -1,8 +1,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
+import { getCurrentUser } from "@/lib/auth";
 
-const listingTypes = [
+const allowedTypes = [
   "product",
   "hire",
   "service",
@@ -10,50 +11,69 @@ const listingTypes = [
   "expert",
 ] as const;
 
-const requiredFields = [
-  "title",
-  "type",
-  "category",
-  "description",
-  "price",
-  "priceUnit",
-  "location",
-  "seller",
-  "image",
-] as const;
+type ListingType = (typeof allowedTypes)[number];
 
-function isValidListing(body: Record<string, unknown>) {
-  const hasRequiredFields = requiredFields.every(
-    (field) =>
-      typeof body[field] === "string" &&
-      (body[field] as string).trim().length > 0
-  );
+const rolePermissions: Record<string, readonly ListingType[]> = {
+  farmer: ["product", "hire"],
+  buyer: [],
+  supplier: ["product", "service"],
+  worker: ["worker"],
+  expert: ["expert", "service"],
+};
 
+const fieldLimits: Record<string, number> = {
+  title: 120,
+  category: 80,
+  description: 5000,
+  priceUnit: 40,
+  location: 120,
+  image: 2000,
+  experience: 500,
+  availability: 500,
+};
+
+function isNonEmptyText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function validText(
+  value: unknown,
+  maxLength: number
+): value is string {
   return (
-    hasRequiredFields &&
-    (listingTypes as readonly unknown[]).includes(body.type) &&
-    typeof body.price === "number" &&
-    Number.isFinite(body.price) &&
-    body.price >= 0 &&
-    (body.skills === undefined ||
-      (Array.isArray(body.skills) &&
-        body.skills.every((skill) => typeof skill === "string")))
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= maxLength
   );
 }
 
 export async function GET(request: NextRequest) {
   try {
     const db = await getDatabase();
-    const searchParams = request.nextUrl.searchParams;
+    const params = request.nextUrl.searchParams;
 
-    const type = searchParams.get("type");
-    const category = searchParams.get("category");
-    const location = searchParams.get("location");
-    const search = searchParams.get("q")?.trim();
+    const type = params.get("type");
+    const category = params.get("category");
+    const location = params.get("location");
+    const search = params.get("q")?.trim();
 
-    if (type && !(listingTypes as readonly string[]).includes(type)) {
+    if (
+      type &&
+      !(allowedTypes as readonly string[]).includes(type)
+    ) {
       return NextResponse.json(
         { success: false, message: "Invalid listing type." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      (category && category.length > 80) ||
+      (location && location.length > 120) ||
+      (search && search.length > 100)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Search filters are too long." },
         { status: 400 }
       );
     }
@@ -67,17 +87,17 @@ export async function GET(request: NextRequest) {
     if (location) filter.location = location;
 
     if (search) {
-      const escapedSearch = search.replace(
+      const escaped = search.replace(
         /[.*+?^${}()|[\]\\]/g,
         "\\$&"
       );
 
       filter.$or = [
-        { title: { $regex: escapedSearch, $options: "i" } },
-        { category: { $regex: escapedSearch, $options: "i" } },
-        { description: { $regex: escapedSearch, $options: "i" } },
-        { location: { $regex: escapedSearch, $options: "i" } },
-        { skills: { $regex: escapedSearch, $options: "i" } },
+        { title: { $regex: escaped, $options: "i" } },
+        { category: { $regex: escaped, $options: "i" } },
+        { description: { $regex: escaped, $options: "i" } },
+        { location: { $regex: escaped, $options: "i" } },
+        { skills: { $regex: escaped, $options: "i" } },
       ];
     }
 
@@ -91,14 +111,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       count: listings.length,
-      listings: listings.map((listing) => ({
-        ...listing,
-        id: listing._id.toString(),
-        _id: undefined,
-      })),
+      listings: listings.map((document) => {
+        const {
+          _id,
+          userId: _userId,
+          userEmail: _userEmail,
+          sellerId: _sellerId,
+          sellerEmail: _sellerEmail,
+          ownerId: _ownerId,
+          ownerEmail: _ownerEmail,
+          createdBy: _createdBy,
+          ...publicListing
+        } = document;
+
+        return {
+          ...publicListing,
+          id: _id.toString(),
+        };
+      }),
     });
   } catch (error) {
-    console.error("GET /api/listings failed:", error);
+    console.error("Failed to retrieve listings:", error);
 
     return NextResponse.json(
       { success: false, message: "Unable to load listings." },
@@ -109,49 +142,140 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Authentication must happen before accepting a listing.
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please log in before creating a listing.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const permittedTypes = rolePermissions[user.role] ?? [];
+
+    if (permittedTypes.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Your account type does not have permission to create listings.",
+        },
+        { status: 403 }
+      );
+    }
+
     const body: unknown = await request.json();
 
     if (
       !body ||
       typeof body !== "object" ||
-      Array.isArray(body) ||
-      !isValidListing(body as Record<string, unknown>)
+      Array.isArray(body)
     ) {
       return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Invalid listing. Check the required fields, listing type, price, and skills.",
-        },
+        { success: false, message: "Invalid request body." },
         { status: 400 }
       );
     }
 
     const data = body as Record<string, unknown>;
+
+    const requiredLimits = {
+      title: fieldLimits.title,
+      category: fieldLimits.category,
+      description: fieldLimits.description,
+      priceUnit: fieldLimits.priceUnit,
+      location: fieldLimits.location,
+      image: fieldLimits.image,
+    };
+
+    const missingOrInvalid = Object.entries(requiredLimits).some(
+      ([key, maxLength]) => !validText(data[key], maxLength)
+    );
+
+    if (
+      missingOrInvalid ||
+      typeof data.type !== "string" ||
+      !(allowedTypes as readonly string[]).includes(data.type) ||
+      !permittedTypes.includes(data.type as ListingType) ||
+      typeof data.price !== "number" ||
+      !Number.isFinite(data.price) ||
+      data.price < 0 ||
+      data.price > 1_000_000_000 ||
+      (data.skills !== undefined &&
+        (!Array.isArray(data.skills) ||
+          data.skills.length > 50 ||
+          !data.skills.every(
+            (skill) =>
+              typeof skill === "string" &&
+              skill.trim().length > 0 &&
+              skill.trim().length <= 80
+          ))) ||
+      (data.experience !== undefined &&
+        (typeof data.experience !== "string" ||
+          data.experience.length > fieldLimits.experience)) ||
+      (data.availability !== undefined &&
+        (typeof data.availability !== "string" ||
+          data.availability.length > fieldLimits.availability))
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please provide valid listing details for your account type.",
+        },
+        { status: 400 }
+      );
+    }
+
     const db = await getDatabase();
+    const now = new Date();
 
     const listing = {
       title: (data.title as string).trim(),
-      type: data.type,
+      type: data.type as ListingType,
       category: (data.category as string).trim(),
       description: (data.description as string).trim(),
       price: data.price,
       priceUnit: (data.priceUnit as string).trim(),
       location: (data.location as string).trim(),
-      seller: (data.seller as string).trim(),
+
+      // Seller identity comes from the authenticated session,
+      // never from a user-supplied request field.
+      seller: user.name,
+      userId: user.id,
+      userEmail: user.email,
+      sellerId: user.id,
+      sellerEmail: user.email,
+      ownerId: user.id,
+      ownerEmail: user.email,
+      createdBy: user.id,
+      sellerRole: user.role,
+
       image: (data.image as string).trim(),
-      mediaCount: 1,
-      skills: data.skills ?? [],
+      skills: Array.isArray(data.skills)
+        ? data.skills.map((skill) => (skill as string).trim())
+        : [],
       experience:
-        typeof data.experience === "string" ? data.experience : "",
+        typeof data.experience === "string"
+          ? data.experience.trim()
+          : "",
       availability:
-        typeof data.availability === "string" ? data.availability : "",
+        typeof data.availability === "string"
+          ? data.availability.trim()
+          : "",
+      mediaCount: 1,
       status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const result = await db.collection("listings").insertOne(listing);
+    const result = await db
+      .collection("listings")
+      .insertOne(listing);
 
     return NextResponse.json(
       {
@@ -162,7 +286,14 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("POST /api/listings failed:", error);
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON request body." },
+        { status: 400 }
+      );
+    }
+
+    console.error("Failed to create listing:", error);
 
     return NextResponse.json(
       { success: false, message: "Unable to create listing." },
