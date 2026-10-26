@@ -1,11 +1,12 @@
+
 import { NextResponse } from "next/server";
+import { connection } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 
-export async function GET(request: Request) {
-  try {
-    // Access request-specific data so this endpoint is handled per request.
-    request.headers.get("cookie");
+export async function GET() {
+  await connection();
 
+  try {
     const user = await getCurrentUser();
 
     if (!user) {

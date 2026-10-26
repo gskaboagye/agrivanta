@@ -1,0 +1,297 @@
+
+import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
+import { getDatabase } from "@/lib/mongodb";
+import { getCurrentUser } from "@/lib/auth";
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+function ownerFilter(user: {
+  id?: string;
+  email?: string;
+}) {
+  const conditions: Record<string, string>[] = [];
+
+  if (user.id) {
+    conditions.push(
+      { userId: user.id },
+      { sellerId: user.id },
+      { ownerId: user.id },
+      { createdBy: user.id }
+    );
+  }
+
+  if (user.email) {
+    conditions.push(
+      { userEmail: user.email },
+      { sellerEmail: user.email },
+      { ownerEmail: user.email }
+    );
+  }
+
+  return conditions.length ? { $or: conditions } : null;
+}
+
+function validText(value: unknown, maxLength: number): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= maxLength
+  );
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: RouteContext
+) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Please log in first." },
+        { status: 401 }
+      );
+    }
+
+    const ownership = ownerFilter(user);
+
+    if (!ownership) {
+      return NextResponse.json(
+        { success: false, message: "Listing not found." },
+        { status: 404 }
+      );
+    }
+
+    const { id } = await context.params;
+
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing ID." },
+        { status: 400 }
+      );
+    }
+
+    const body: unknown = await request.json();
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request body." },
+        { status: 400 }
+      );
+    }
+
+    const data = body as Record<string, unknown>;
+    const allowedTypes = [
+      "product",
+      "hire",
+      "service",
+      "worker",
+      "expert",
+    ];
+
+    const rolePermissions: Record<string, string[]> = {
+      farmer: ["product", "hire"],
+      buyer: [],
+      supplier: ["product", "service"],
+      worker: ["worker"],
+      expert: ["expert", "service"],
+    };
+
+    const currentType = data.type;
+
+    if (
+      currentType !== undefined &&
+      (typeof currentType !== "string" ||
+        !allowedTypes.includes(currentType) ||
+        !(rolePermissions[user.role] ?? []).includes(currentType))
+    ) {
+      return NextResponse.json(
+        { success: false, message: "You cannot use this listing type." },
+        { status: 403 }
+      );
+    }
+
+    const fields: Record<string, number> = {
+      title: 120,
+      category: 80,
+      description: 5000,
+      priceUnit: 40,
+      location: 120,
+      image: 2000,
+      experience: 500,
+      availability: 500,
+    };
+
+    const update: Record<string, unknown> = {};
+
+    for (const [field, maxLength] of Object.entries(fields)) {
+      if (data[field] !== undefined) {
+        if (!validText(data[field], maxLength)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `Invalid value for ${field}.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        update[field] = data[field].trim();
+      }
+    }
+
+    if (data.price !== undefined) {
+      if (
+        typeof data.price !== "number" ||
+        !Number.isFinite(data.price) ||
+        data.price < 0 ||
+        data.price > 1_000_000_000
+      ) {
+        return NextResponse.json(
+          { success: false, message: "Invalid price." },
+          { status: 400 }
+        );
+      }
+
+      update.price = data.price;
+    }
+
+    if (data.skills !== undefined) {
+      if (
+        !Array.isArray(data.skills) ||
+        data.skills.length > 50 ||
+        !data.skills.every(
+          (skill) =>
+            typeof skill === "string" &&
+            skill.trim().length > 0 &&
+            skill.trim().length <= 80
+        )
+      ) {
+        return NextResponse.json(
+          { success: false, message: "Invalid skills." },
+          { status: 400 }
+        );
+      }
+
+      update.skills = data.skills.map((skill: string) => skill.trim());
+    }
+
+    if (data.type !== undefined) {
+      update.type = data.type;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json(
+        { success: false, message: "No valid fields to update." },
+        { status: 400 }
+      );
+    }
+
+    update.updatedAt = new Date();
+
+    const db = await getDatabase();
+
+    const result = await db.collection("listings").updateOne(
+      {
+        _id: new ObjectId(id),
+        ...ownership,
+      },
+      { $set: update }
+    );
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Listing not found or you do not own it.",
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Listing updated successfully.",
+    });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON request body." },
+        { status: 400 }
+      );
+    }
+
+    console.error("Failed to update listing:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to update listing." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  context: RouteContext
+) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Please log in first." },
+        { status: 401 }
+      );
+    }
+
+    const ownership = ownerFilter(user);
+
+    if (!ownership) {
+      return NextResponse.json(
+        { success: false, message: "Listing not found." },
+        { status: 404 }
+      );
+    }
+
+    const { id } = await context.params;
+
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing ID." },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    const result = await db.collection("listings").deleteOne({
+      _id: new ObjectId(id),
+      ...ownership,
+    });
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Listing not found or you do not own it.",
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Listing deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Failed to delete listing:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to delete listing." },
+      { status: 500 }
+    );
+  }
+}

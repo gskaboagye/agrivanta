@@ -3,27 +3,20 @@
 
 import {
   Activity,
-  ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   Bell,
   CheckCircle2,
-  ChevronDown,
   CircleHelp,
-  Clock3,
   Compass,
-  CreditCard,
   LayoutDashboard,
   Leaf,
   LogOut,
   Menu,
-  MessageSquare,
   Package,
   Search,
-  Settings,
   ShoppingBag,
   Sprout,
-  Tractor,
   TrendingUp,
   UserRound,
   Users,
@@ -61,12 +54,6 @@ type DashboardShellProps = {
     marketplaceListings: number;
   };
   recentListings: ListingPreview[];
-};
-
-const BRAND = {
-  green: "#17472D",
-  gold: "#D9A441",
-  ivory: "#F8F6EE",
 };
 
 const roleDetails: Record<
@@ -108,6 +95,7 @@ const roleDetails: Record<
 const navigation = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Marketplace", href: "/products", icon: ShoppingBag },
+  { label: "My Listings", href: "/dashboard/my-listings", icon: Package },
   { label: "My activity", href: "/dashboard#activity", icon: Activity },
 ];
 
@@ -123,9 +111,9 @@ const roleActions: Record<
       icon: ShoppingBag,
     },
     {
-      title: "Manage my products",
-      description: "Review available marketplace listings.",
-      href: "/dashboard#activity",
+      title: "Manage my listings",
+      description: "Edit or remove products connected to your account.",
+      href: "/dashboard/my-listings",
       icon: Package,
     },
   ],
@@ -151,9 +139,10 @@ const roleActions: Record<
       icon: ShoppingBag,
     },
     {
-      title: "Review available listings",
-      description: "Explore current agricultural products.",
-      href: "/dashboard#activity",
+      title: "Manage my listings",
+      description:
+        "Edit or remove products and services connected to your account.",
+      href: "/dashboard/my-listings",
       icon: Package,
     },
   ],
@@ -165,10 +154,10 @@ const roleActions: Record<
       icon: Compass,
     },
     {
-      title: "Connect with the community",
-      description: "Discover products and businesses in agriculture.",
-      href: "/dashboard#activity",
-      icon: Users,
+      title: "Manage my listings",
+      description: "Review and update opportunities you've published.",
+      href: "/dashboard/my-listings",
+      icon: Package,
     },
   ],
   expert: [
@@ -179,10 +168,10 @@ const roleActions: Record<
       icon: Users,
     },
     {
-      title: "Browse current listings",
-      description: "See what is available in the marketplace.",
-      href: "/dashboard#activity",
-      icon: Wheat,
+      title: "Manage my listings",
+      description: "Review and update services you've published.",
+      href: "/dashboard/my-listings",
+      icon: Package,
     },
   ],
 };
@@ -240,6 +229,7 @@ function Sidebar({
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#17472D] text-white">
               <Sprout size={23} strokeWidth={1.8} />
             </span>
+
             <span>
               <span className="block text-[20px] font-bold tracking-tight text-[#17472D]">
                 AgriVanta
@@ -268,7 +258,10 @@ function Sidebar({
           <nav className="space-y-1">
             {navigation.map((item) => {
               const active =
-                item.href === "/dashboard" && pathname === "/dashboard";
+                (item.href === "/dashboard" && pathname === "/dashboard") ||
+                (item.href !== "/dashboard" &&
+                  !item.href.includes("#") &&
+                  pathname === item.href);
 
               return (
                 <Link
@@ -283,6 +276,7 @@ function Sidebar({
                 >
                   <item.icon size={18} strokeWidth={1.9} />
                   <span>{item.label}</span>
+
                   {active && (
                     <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#D9A441]" />
                   )}
@@ -306,6 +300,7 @@ function Sidebar({
               <UserRound size={18} strokeWidth={1.9} />
               Account details
             </Link>
+
             <Link
               href="/dashboard#help"
               onClick={onClose}
@@ -322,9 +317,11 @@ function Sidebar({
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#17472D]">
               <Leaf size={19} />
             </div>
+
             <p className="text-[13px] font-bold text-[#17472D]">
               Powering every link
             </p>
+
             <p className="mt-1 text-[11px] leading-5 text-[#778071]">
               Connecting people and opportunities across agriculture.
             </p>
@@ -334,6 +331,7 @@ function Sidebar({
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#17472D] text-sm font-bold text-white">
               {user.name.charAt(0).toUpperCase()}
             </div>
+
             <div className="min-w-0 flex-1">
               <p className="truncate text-[12px] font-bold text-[#26372b]">
                 {user.name}
@@ -507,10 +505,10 @@ export default function DashboardShell({
                   </Link>
 
                   <Link
-                    href="/dashboard#activity"
+                    href="/dashboard/my-listings"
                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10"
                   >
-                    View activity
+                    Manage my listings
                   </Link>
                 </div>
               </div>
@@ -539,6 +537,7 @@ export default function DashboardShell({
                   A snapshot of what is available on AgriVanta.
                 </p>
               </div>
+
               <Link
                 href="/products"
                 className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold text-[#17472D] hover:underline"
@@ -547,7 +546,7 @@ export default function DashboardShell({
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <article className="rounded-2xl border border-[#e8ebe4] bg-white p-5 transition hover:border-[#cdd8c8] hover:shadow-sm sm:p-6">
                 <div className="flex items-start justify-between">
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
@@ -557,6 +556,7 @@ export default function DashboardShell({
                     Live inventory
                   </span>
                 </div>
+
                 <p className="mt-5 text-[12px] font-medium text-[#7c8679]">
                   Active marketplace listings
                 </p>
@@ -577,6 +577,7 @@ export default function DashboardShell({
                     Your account
                   </span>
                 </div>
+
                 <p className="mt-5 text-[12px] font-medium text-[#7c8679]">
                   Your active listings
                 </p>
@@ -610,6 +611,7 @@ export default function DashboardShell({
                   <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D] transition group-hover:bg-[#17472D] group-hover:text-white">
                     <action.icon size={22} strokeWidth={1.7} />
                   </span>
+
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold text-[#26372b]">
                       {action.title}
@@ -618,6 +620,7 @@ export default function DashboardShell({
                       {action.description}
                     </span>
                   </span>
+
                   <ArrowUpRight
                     size={18}
                     className="shrink-0 text-[#9aa294] transition group-hover:text-[#17472D]"
@@ -637,6 +640,7 @@ export default function DashboardShell({
                   The latest active products from the AgriVanta marketplace.
                 </p>
               </div>
+
               <Link
                 href="/products"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17472D] hover:underline"
@@ -650,14 +654,17 @@ export default function DashboardShell({
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
                   <Search size={22} />
                 </span>
+
                 <p className="mt-4 text-sm font-bold text-[#26372b]">
                   {search ? "No matching listings" : "No active listings yet"}
                 </p>
+
                 <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-[#879084]">
                   {search
                     ? "Try another search term or browse the full marketplace."
                     : "When active listings are available, they will appear here."}
                 </p>
+
                 <Link
                   href="/products"
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#17472D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#103921]"
@@ -676,7 +683,6 @@ export default function DashboardShell({
                     >
                       <div className="flex h-[58px] w-[66px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#EAF0E6]">
                         {listing.image ? (
-                          // Listing images are provided by the database.
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={listing.image}
@@ -739,6 +745,7 @@ export default function DashboardShell({
                   {user.name}
                 </p>
               </div>
+
               <div>
                 <p className="text-[11px] font-medium text-[#879084]">
                   Email address
@@ -747,6 +754,7 @@ export default function DashboardShell({
                   {user.email}
                 </p>
               </div>
+
               <div>
                 <p className="text-[11px] font-medium text-[#879084]">
                   Account type
@@ -755,6 +763,7 @@ export default function DashboardShell({
                   {details.label}
                 </p>
               </div>
+
               <div>
                 <p className="text-[11px] font-medium text-[#879084]">
                   Account ID
@@ -770,7 +779,10 @@ export default function DashboardShell({
             id="help"
             className="mt-10 flex flex-col gap-2 border-t border-[#e5e9e0] py-6 text-[11px] text-[#929a8e] sm:flex-row sm:items-center sm:justify-between"
           >
-            <p>© {new Date().getFullYear()} AgriVanta. Powering Every Link in Agriculture.</p>
+            <p>
+              © {new Date().getFullYear()} AgriVanta. Powering Every Link in
+              Agriculture.
+            </p>
             <p className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-[#75966b]" />
               Connected agriculture, better opportunities.
