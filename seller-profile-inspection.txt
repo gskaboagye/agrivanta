@@ -1,0 +1,3834 @@
+=== APP ROUTE STRUCTURE ===
+src\app\layout.tsx
+src\app\page.tsx
+src\app\agriguide\page.tsx
+src\app\api\auth\login\route.ts
+src\app\api\auth\logout\route.ts
+src\app\api\auth\me\route.ts
+src\app\api\auth\register\route.ts
+src\app\api\db-test\route.ts
+src\app\api\inquiries\route.ts
+src\app\api\inquiries\[id]\route.ts
+src\app\api\listings\route.ts
+src\app\api\listings\mine\route.ts
+src\app\api\listings\[id]\route.ts
+src\app\api\uploads\route.ts
+src\app\dashboard\page.tsx
+src\app\dashboard\create-listing\page.tsx
+src\app\dashboard\inquiries\page.tsx
+src\app\dashboard\my-listings\page.tsx
+src\app\login\page.tsx
+src\app\products\page.tsx
+src\app\register\page.tsx
+
+
+========== .\src\lib\auth.ts ==========
+import "server-only";
+
+import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import { ObjectId } from "mongodb";
+import { getDatabase } from "@/lib/mongodb";
+
+export const ACCOUNT_ROLES = [
+  "farmer",
+  "buyer",
+  "supplier",
+  "worker",
+  "expert",
+] as const;
+
+export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: AccountRole;
+};
+
+const COOKIE_NAME = "agrivanta_session";
+const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 7;
+
+function getSecret() {
+  const secret = process.env.AUTH_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "AUTH_SECRET must contain a strong secret of at least 32 characters."
+    );
+  }
+
+  return new TextEncoder().encode(secret);
+}
+
+export async function hashPassword(password: string) {
+  return bcrypt.hash(password, 12);
+}
+
+export async function verifyPassword(
+  password: string,
+  passwordHash: string
+) {
+  return bcrypt.compare(password, passwordHash);
+}
+
+export async function createSession(user: AuthUser) {
+  const token = await new SignJWT({
+    role: user.role,
+    name: user.name,
+    email: user.email,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.id)
+    .setIssuedAt()
+    .setExpirationTime(`${SESSION_DURATION_SECONDS}s`)
+    .sign(getSecret());
+
+  const cookieStore = await cookies();
+
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_DURATION_SECONDS,
+  });
+}
+
+export async function destroySession() {
+  const cookieStore = await cookies();
+
+  cookieStore.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+export async function getSessionClaims() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_NAME)?.value;
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, getSecret(), {
+      algorithms: ["HS256"],
+    });
+
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.role !== "string" ||
+      !ACCOUNT_ROLES.includes(payload.role as AccountRole)
+    ) {
+      return null;
+    }
+
+    return {
+      userId: payload.sub,
+      role: payload.role as AccountRole,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const claims = await getSessionClaims();
+
+  if (!claims || !ObjectId.isValid(claims.userId)) {
+    return null;
+  }
+
+  const db = await getDatabase();
+
+  const user = await db.collection("users").findOne(
+    { _id: new ObjectId(claims.userId) },
+    {
+      projection: {
+        name: 1,
+        email: 1,
+        phone: 1,
+        role: 1,
+      },
+    }
+  );
+
+  if (!user || !ACCOUNT_ROLES.includes(user.role as AccountRole)) {
+    return null;
+  }
+
+  return {
+    id: user._id.toString(),
+    name: String(user.name ?? ""),
+    email: String(user.email ?? ""),
+    phone: String(user.phone ?? ""),
+    role: user.role as AccountRole,
+  };
+}
+
+
+========== .\src\lib\mongodb.ts ==========
+
+import { MongoClient } from "mongodb";
+
+const uri = process.env.MONGODB_URI;
+const dbName = process.env.MONGODB_DB || "agrivanta";
+
+if (!uri) {
+  throw new Error("Please define MONGODB_URI in your .env.local file");
+}
+
+const options = {};
+
+let client: MongoClient;
+let clientPromise: Promise<MongoClient>;
+
+declare global {
+  // eslint-disable-next-line no-var
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}
+
+if (process.env.NODE_ENV === "development") {
+  if (!global._mongoClientPromise) {
+    client = new MongoClient(uri, options);
+    global._mongoClientPromise = client.connect();
+  }
+  clientPromise = global._mongoClientPromise;
+} else {
+  client = new MongoClient(uri, options);
+  clientPromise = client.connect();
+}
+
+export async function getDatabase() {
+  const connectedClient = await clientPromise;
+  return connectedClient.db(dbName);
+}
+
+
+
+========== .\src\app\api\auth\register\route.ts ==========
+import { NextResponse } from "next/server";
+import { MongoServerError } from "mongodb";
+import { getDatabase } from "@/lib/mongodb";
+import {
+  ACCOUNT_ROLES,
+  createSession,
+  hashPassword,
+  type AccountRole,
+} from "@/lib/auth";
+
+
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function POST(request: Request) {
+  try {
+    const body: unknown = await request.json();
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request data." },
+        { status: 400 }
+      );
+    }
+
+    const data = body as Record<string, unknown>;
+
+    const name =
+      typeof data.name === "string" ? data.name.trim() : "";
+    const email =
+      typeof data.email === "string"
+        ? data.email.trim().toLowerCase()
+        : "";
+    const phone =
+      typeof data.phone === "string" ? data.phone.trim() : "";
+    const password =
+      typeof data.password === "string" ? data.password : "";
+    const role =
+      typeof data.role === "string" ? data.role : "";
+
+    if (name.length < 2 || name.length > 80) {
+      return NextResponse.json(
+        { success: false, message: "Name must be 2â€“80 characters." },
+        { status: 400 }
+      );
+    }
+
+    if (email.length > 254 || !emailPattern.test(email)) {
+      return NextResponse.json(
+        { success: false, message: "Enter a valid email address." },
+        { status: 400 }
+      );
+    }
+
+    if (phone.length > 30) {
+      return NextResponse.json(
+        { success: false, message: "Phone number is too long." },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 10 || password.length > 72) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Password must contain 10â€“72 characters.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!ACCOUNT_ROLES.includes(role as AccountRole)) {
+      return NextResponse.json(
+        { success: false, message: "Select a valid account type." },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+    const users = db.collection("users");
+
+    const existingUser = await users.findOne(
+      { email },
+      { projection: { _id: 1 } }
+    );
+
+    if (existingUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "An account with this email already exists.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const passwordHash = await hashPassword(password);
+    const now = new Date();
+
+    const result = await users.insertOne({
+      name,
+      email,
+      phone,
+      role,
+      passwordHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const user = {
+      id: result.insertedId.toString(),
+      name,
+      email,
+      phone,
+      role: role as AccountRole,
+    };
+
+    await createSession(user);
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Your AgriVanta account has been created.",
+        user,
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    if (
+      error instanceof MongoServerError &&
+      error.code === 11000
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "An account with this email already exists.",
+        },
+        { status: 409 }
+      );
+    }
+
+    console.error("Registration error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Registration failed. Please try again.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+========== .\src\app\api\listings\route.ts ==========
+
+import { NextRequest, NextResponse } from "next/server";
+import { getDatabase } from "@/lib/mongodb";
+import { getCurrentUser } from "@/lib/auth";
+
+const allowedTypes = [
+  "product",
+  "hire",
+  "service",
+  "worker",
+  "expert",
+] as const;
+
+type ListingType = (typeof allowedTypes)[number];
+
+const rolePermissions: Record<string, readonly ListingType[]> = {
+  farmer: ["product", "hire"],
+  buyer: [],
+  supplier: ["product", "service"],
+  worker: ["worker"],
+  expert: ["expert", "service"],
+};
+
+const fieldLimits: Record<string, number> = {
+  title: 120,
+  category: 80,
+  subcategory: 100,
+  description: 5000,
+  priceUnit: 40,
+  location: 120,
+  image: 2000,
+  experience: 500,
+  availability: 500,
+};
+
+const MAX_IMAGES = 8;
+const MAX_VIDEOS = 2;
+const MAX_MEDIA = 8;
+
+function validText(
+  value: unknown,
+  maxLength: number
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= maxLength
+  );
+}
+
+function isCloudinaryUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2000) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "res.cloudinary.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isValidSpecifications(value: unknown): boolean {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+
+  const entries = Object.entries(value);
+
+  if (entries.length > 40) {
+    return false;
+  }
+
+  return entries.every(([key, item]) => {
+    if (!key.trim() || key.length > 100) return false;
+
+    if (typeof item === "string") {
+      return item.length <= 500;
+    }
+
+    if (typeof item === "number") {
+      return Number.isFinite(item) && item >= 0;
+    }
+
+    return typeof item === "boolean";
+  });
+}
+
+function isValidMediaArray(
+  value: unknown,
+  maxLength: number
+): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= maxLength &&
+    value.every(isCloudinaryUrl)
+  );
+}
+
+function isValidMediaObjects(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > MAX_MEDIA) {
+    return false;
+  }
+
+  return value.every((item) => {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      Array.isArray(item)
+    ) {
+      return false;
+    }
+
+    const media = item as Record<string, unknown>;
+
+    return (
+      isCloudinaryUrl(media.secure_url) &&
+      (media.type === "image" || media.type === "video") &&
+      (media.resource_type === "image" ||
+        media.resource_type === "video")
+    );
+  });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const db = await getDatabase();
+    const params = request.nextUrl.searchParams;
+
+    const type = params.get("type");
+    const category = params.get("category");
+    const subcategory = params.get("subcategory");
+    const location = params.get("location");
+    const search = params.get("q")?.trim();
+
+    if (
+      type &&
+      !(allowedTypes as readonly string[]).includes(type)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing type." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      (category && category.length > 80) ||
+      (subcategory && subcategory.length > 100) ||
+      (location && location.length > 120) ||
+      (search && search.length > 100)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Search filters are too long." },
+        { status: 400 }
+      );
+    }
+
+    const filter: Record<string, unknown> = {
+      status: "active",
+    };
+
+    if (type) filter.type = type;
+    if (category) filter.category = category;
+    if (subcategory) filter.subcategory = subcategory;
+    if (location) filter.location = location;
+
+    if (search) {
+      const escaped = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      filter.$or = [
+        { title: { $regex: escaped, $options: "i" } },
+        { category: { $regex: escaped, $options: "i" } },
+        { subcategory: { $regex: escaped, $options: "i" } },
+        { description: { $regex: escaped, $options: "i" } },
+        { location: { $regex: escaped, $options: "i" } },
+        { skills: { $regex: escaped, $options: "i" } },
+      ];
+    }
+
+    const listings = await db
+      .collection("listings")
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray();
+
+    return NextResponse.json({
+      success: true,
+      count: listings.length,
+      listings: listings.map((document) => {
+        const {
+          _id,
+          userId: _userId,
+          userEmail: _userEmail,
+          sellerId: _sellerId,
+          sellerEmail: _sellerEmail,
+          ownerId: _ownerId,
+          ownerEmail: _ownerEmail,
+          createdBy: _createdBy,
+          ...publicListing
+        } = document;
+
+        return {
+          ...publicListing,
+          id: _id.toString(),
+        };
+      }),
+    });
+  } catch (error) {
+    console.error("Failed to retrieve listings:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to load listings." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please log in before creating a listing.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const permittedTypes = rolePermissions[user.role] ?? [];
+
+    if (permittedTypes.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Your account type does not have permission to create listings.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const body: unknown = await request.json();
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request body." },
+        { status: 400 }
+      );
+    }
+
+    const data = body as Record<string, unknown>;
+
+    const requiredLimits = {
+      title: fieldLimits.title,
+      category: fieldLimits.category,
+      description: fieldLimits.description,
+      priceUnit: fieldLimits.priceUnit,
+      location: fieldLimits.location,
+    };
+
+    const requiredFieldsValid = Object.entries(requiredLimits).every(
+      ([key, maxLength]) => validText(data[key], maxLength)
+    );
+
+    if (
+      !requiredFieldsValid ||
+      typeof data.type !== "string" ||
+      !(allowedTypes as readonly string[]).includes(data.type) ||
+      !permittedTypes.includes(data.type as ListingType) ||
+      typeof data.price !== "number" ||
+      !Number.isFinite(data.price) ||
+      data.price < 0 ||
+      data.price > 1_000_000_000
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please provide valid listing details for your account type.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const subcategory = data.subcategory;
+
+    if (
+      subcategory !== undefined &&
+      !validText(subcategory, fieldLimits.subcategory)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing subcategory." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      data.specifications !== undefined &&
+      !isValidSpecifications(data.specifications)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing specifications." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      data.image !== undefined &&
+      data.image !== "" &&
+      !isCloudinaryUrl(data.image)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing image URL." },
+        { status: 400 }
+      );
+    }
+
+    const images =
+      data.images === undefined
+        ? []
+        : data.images;
+
+    const videos =
+      data.videos === undefined
+        ? []
+        : data.videos;
+
+    if (!isValidMediaArray(images, MAX_IMAGES)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing images." },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidMediaArray(videos, MAX_VIDEOS)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing videos." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      data.media !== undefined &&
+      !isValidMediaObjects(data.media)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing media." },
+        { status: 400 }
+      );
+    }
+
+    if (images.length + videos.length > MAX_MEDIA) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `You can attach up to ${MAX_MEDIA} media files.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      data.skills !== undefined &&
+      (!Array.isArray(data.skills) ||
+        data.skills.length > 50 ||
+        !data.skills.every(
+          (skill) =>
+            typeof skill === "string" &&
+            skill.trim().length > 0 &&
+            skill.trim().length <= 80
+        ))
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid skills." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      data.experience !== undefined &&
+      (typeof data.experience !== "string" ||
+        data.experience.length > fieldLimits.experience)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid experience." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      data.availability !== undefined &&
+      (typeof data.availability !== "string" ||
+        data.availability.length > fieldLimits.availability)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid availability." },
+        { status: 400 }
+      );
+    }
+
+    const primaryImage =
+      typeof data.image === "string" && data.image.trim()
+        ? data.image.trim()
+        : images[0] ?? "";
+
+    if (!primaryImage) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Upload at least one image for your listing.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+    const now = new Date();
+
+    const listing = {
+      title: (data.title as string).trim(),
+      type: data.type as ListingType,
+      category: (data.category as string).trim(),
+      subcategory:
+        typeof subcategory === "string" ? subcategory.trim() : "",
+      specifications:
+        data.specifications &&
+        typeof data.specifications === "object" &&
+        !Array.isArray(data.specifications)
+          ? data.specifications
+          : {},
+      description: (data.description as string).trim(),
+      price: data.price,
+      priceUnit: (data.priceUnit as string).trim(),
+      location: (data.location as string).trim(),
+
+      // Identity is derived from the authenticated user, not the request.
+      seller: user.name,
+      userId: user.id,
+      userEmail: user.email,
+      sellerId: user.id,
+      sellerEmail: user.email,
+      ownerId: user.id,
+      ownerEmail: user.email,
+      createdBy: user.id,
+      sellerRole: user.role,
+
+      image: primaryImage,
+      images,
+      videos,
+      media: Array.isArray(data.media) ? data.media : [],
+      skills: Array.isArray(data.skills)
+        ? data.skills.map((skill) => (skill as string).trim())
+        : [],
+      experience:
+        typeof data.experience === "string"
+          ? data.experience.trim()
+          : "",
+      availability:
+        typeof data.availability === "string"
+          ? data.availability.trim()
+          : "",
+      mediaCount: Math.max(
+        images.length + videos.length,
+        primaryImage ? 1 : 0
+      ),
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await db.collection("listings").insertOne(listing);
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Listing created successfully.",
+        id: result.insertedId.toString(),
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON request body." },
+        { status: 400 }
+      );
+    }
+
+    console.error("Failed to create listing:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to create listing." },
+      { status: 500 }
+    );
+  }
+}
+
+
+
+========== .\src\app\api\listings\mine\route.ts ==========
+import { NextResponse } from "next/server";
+import { connection } from "next/server";
+import { getDatabase } from "@/lib/mongodb";
+import { getCurrentUser } from "@/lib/auth";
+
+export async function GET() {
+  await connection();
+
+  try {
+    const user = await getCurrentUser();
+
+    // Keep the rest of your existing GET logic here.
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Please log in to view your listings." },
+        { status: 401 }
+      );
+    }
+
+    const ownerConditions: Record<string, string>[] = [];
+
+    if (user.id) {
+      ownerConditions.push(
+        { userId: user.id },
+        { sellerId: user.id },
+        { ownerId: user.id },
+        { createdBy: user.id }
+      );
+    }
+
+    if (user.email) {
+      ownerConditions.push(
+        { userEmail: user.email },
+        { sellerEmail: user.email },
+        { ownerEmail: user.email }
+      );
+    }
+
+    if (ownerConditions.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        listings: [],
+      });
+    }
+
+    const db = await getDatabase();
+
+    const documents = await db
+      .collection("listings")
+      .find({ $or: ownerConditions })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray();
+
+    const listings = documents.map((document) => {
+      const { _id, ...listing } = document;
+
+      return {
+        ...listing,
+        id: _id.toString(),
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      count: listings.length,
+      listings,
+    });
+  } catch (error) {
+    console.error("Failed to load user's listings:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to load your listings." },
+      { status: 500 }
+    );
+  }
+}
+
+
+
+========== .\src\app\api\inquiries\route.ts ==========
+import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
+import { getCurrentUser } from "@/lib/auth";
+import { getDatabase } from "@/lib/mongodb";
+
+function getListingOwnerId(listing: Record<string, unknown>) {
+  const fields = ["userId", "sellerId", "ownerId", "createdBy"];
+
+  for (const field of fields) {
+    const value = listing[field];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Please log in to contact a seller." },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const listingId =
+      typeof body.listingId === "string" ? body.listingId.trim() : "";
+    const message =
+      typeof body.message === "string" ? body.message.trim() : "";
+
+    if (!ObjectId.isValid(listingId)) {
+      return NextResponse.json(
+        { error: "A valid listing ID is required." },
+        { status: 400 }
+      );
+    }
+
+    if (message.length < 10 || message.length > 3000) {
+      return NextResponse.json(
+        { error: "Your message must be between 10 and 3000 characters." },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    const listing = await db.collection("listings").findOne({
+      _id: new ObjectId(listingId),
+      status: "active",
+    });
+
+    if (!listing) {
+      return NextResponse.json(
+        { error: "This listing is unavailable." },
+        { status: 404 }
+      );
+    }
+
+    const sellerId = getListingOwnerId(
+      listing as Record<string, unknown>
+    );
+
+    if (!sellerId) {
+      return NextResponse.json(
+        { error: "The seller for this listing could not be identified." },
+        { status: 409 }
+      );
+    }
+
+    if (sellerId === user.id) {
+      return NextResponse.json(
+        { error: "You cannot send an inquiry about your own listing." },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+
+    const inquiry = {
+      listingId,
+      listingTitle: String(listing.title ?? "Untitled listing"),
+      listingType: String(listing.type ?? "product"),
+
+      sellerId,
+      sellerName: String(
+        listing.seller ?? listing.sellerName ?? "Seller"
+      ),
+      sellerEmail:
+        typeof listing.sellerEmail === "string"
+          ? listing.sellerEmail
+          : typeof listing.userEmail === "string"
+            ? listing.userEmail
+            : "",
+
+      buyerId: user.id,
+      buyerName: user.name,
+      buyerEmail: user.email,
+      buyerPhone: user.phone,
+
+      message,
+      status: "new",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await db.collection("inquiries").insertOne(inquiry);
+
+    return NextResponse.json(
+      {
+        message: "Your inquiry has been sent successfully.",
+        inquiry: {
+          id: result.insertedId.toString(),
+          listingId: inquiry.listingId,
+          listingTitle: inquiry.listingTitle,
+          status: inquiry.status,
+          createdAt: inquiry.createdAt,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Create inquiry error:", error);
+
+    return NextResponse.json(
+      { error: "Unable to send your inquiry right now." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Please log in to view inquiries." },
+        { status: 401 }
+      );
+    }
+
+    const view = request.nextUrl.searchParams.get("view") ?? "all";
+
+    if (!["all", "sent", "received"].includes(view)) {
+      return NextResponse.json(
+        { error: "View must be all, sent, or received." },
+        { status: 400 }
+      );
+    }
+
+    const filter =
+      view === "sent"
+        ? { buyerId: user.id }
+        : view === "received"
+          ? { sellerId: user.id }
+          : {
+              $or: [{ buyerId: user.id }, { sellerId: user.id }],
+            };
+
+    const db = await getDatabase();
+
+    const inquiries = await db
+      .collection("inquiries")
+      .find(filter)
+      .sort({ updatedAt: -1 })
+      .limit(100)
+      .toArray();
+
+    return NextResponse.json({
+      inquiries: inquiries.map((item) => ({
+        id: item._id.toString(),
+        listingId: String(item.listingId ?? ""),
+        listingTitle: String(item.listingTitle ?? ""),
+        listingType: String(item.listingType ?? "product"),
+        sellerId: String(item.sellerId ?? ""),
+        sellerName: String(item.sellerName ?? "Seller"),
+        sellerEmail: String(item.sellerEmail ?? ""),
+        buyerId: String(item.buyerId ?? ""),
+        buyerName: String(item.buyerName ?? ""),
+        buyerEmail: String(item.buyerEmail ?? ""),
+        buyerPhone: String(item.buyerPhone ?? ""),
+        message: String(item.message ?? ""),
+        status: String(item.status ?? "new"),
+        createdAt: item.createdAt ?? null,
+        updatedAt: item.updatedAt ?? null,
+      })),
+    });
+  } catch (error) {
+    console.error("Fetch inquiries error:", error);
+
+    return NextResponse.json(
+      { error: "Unable to load inquiries." },
+      { status: 500 }
+    );
+  }
+}
+
+
+
+========== .\src\app\register\page.tsx ==========
+"use client";
+
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Eye, EyeOff, Leaf } from "lucide-react";
+
+const roles = [
+  { value: "farmer", label: "Farmer" },
+  { value: "buyer", label: "Buyer" },
+  { value: "supplier", label: "Supplier / Service Provider" },
+  { value: "worker", label: "Farm Worker" },
+  { value: "expert", label: "Agricultural Expert" },
+];
+
+export default function RegisterPage() {
+  const router = useRouter();
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("farmer");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Your passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          role,
+          password,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || "Unable to create your account.");
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Unable to connect. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#F8F6EE] px-4 py-10 text-[#193D2A] sm:py-16">
+      <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-[#E7E4D9] bg-white shadow-sm md:grid md:grid-cols-2">
+        <section className="flex flex-col justify-between bg-[#17472D] p-8 text-white sm:p-10">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#D9A441] text-[#17472D]">
+              <Leaf size={25} />
+            </span>
+            <span className="text-2xl font-extrabold">AgriVanta</span>
+          </Link>
+
+          <div className="py-10">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E6BD57]">
+              Join the agricultural network
+            </p>
+            <h1 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
+              Grow your opportunities.
+            </h1>
+            <p className="mt-4 leading-7 text-white/75">
+              Connect with farmers, buyers, suppliers, workers and
+              agricultural experts across Ghana.
+            </p>
+          </div>
+
+          <p className="text-sm text-white/65">
+            Powering Every Link in Agriculture.
+          </p>
+        </section>
+
+        <section className="p-6 sm:p-10">
+          <h2 className="text-2xl font-extrabold">Create your account</h2>
+          <p className="mt-2 text-sm text-[#718071]">
+            Enter your details to join AgriVanta.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+            <label className="block text-sm font-semibold">
+              Full name
+              <input
+                required
+                minLength={2}
+                maxLength={80}
+                autoComplete="name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
+                placeholder="Your full name"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Email address
+              <input
+                required
+                type="email"
+                maxLength={254}
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
+                placeholder="you@example.com"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Phone number <span className="font-normal text-[#718071]">(optional)</span>
+              <input
+                type="tel"
+                maxLength={30}
+                autoComplete="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
+                placeholder="Your contact number"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Account type
+              <select
+                required
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] bg-white px-4 py-3 font-normal outline-none focus:border-[#17472D]"
+              >
+                {roles.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Password
+              <span className="relative mt-2 block">
+                <input
+                  required
+                  type={showPassword ? "text" : "password"}
+                  minLength={10}
+                  maxLength={72}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full rounded-lg border border-[#D9DED4] px-4 py-3 pr-12 font-normal outline-none focus:border-[#17472D]"
+                  placeholder="At least 10 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#718071]"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </span>
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Confirm password
+              <input
+                required
+                type="password"
+                minLength={10}
+                maxLength={72}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
+                placeholder="Enter your password again"
+              />
+            </label>
+
+            {error && (
+              <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#17472D] px-4 py-3.5 font-bold text-white hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Creating account..." : "Create account"}
+              {!loading && <ArrowRight size={17} />}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-[#718071]">
+            Already registered?{" "}
+            <Link href="/login" className="font-bold text-[#17472D] hover:underline">
+              Log in
+            </Link>
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+
+========== .\src\app\products\page.tsx ==========
+
+
+"use client";
+
+import { Suspense, useEffect, useMemo, useState } from "react";
+
+import type { FormEvent } from "react";
+
+import { useSearchParams } from "next/navigation";
+
+import {
+
+  Send,
+
+  Search,
+
+  SlidersHorizontal,
+
+  MapPin,
+
+  ShoppingBag,
+
+  Tractor,
+
+  Wrench,
+
+  Camera,
+
+  ShieldCheck,
+
+  ArrowRight,
+
+  X,
+
+  CalendarClock,
+
+  UserRound,
+
+  Info,
+
+  Store,
+
+  BriefcaseBusiness,
+
+  GraduationCap,
+
+  Clock,
+
+  Users,
+
+  ChevronLeft,
+
+  ChevronRight,
+
+  Play,
+
+  Video,
+
+} from "lucide-react";
+
+type ListingType =
+
+  | "product"
+
+  | "hire"
+
+  | "service"
+
+  | "worker"
+
+  | "expert";
+
+type MediaItem = {
+
+  url: string;
+
+  type: "image" | "video";
+
+};
+
+type Listing = {
+
+  id: string;
+
+  title: string;
+
+  type: ListingType;
+
+  category: string;
+
+  subcategory?: string;
+
+  specifications?: Record<string, unknown>;
+
+  description: string;
+
+  price: number;
+
+  priceUnit: string;
+
+  location: string;
+
+  seller: string;
+
+  image: string;
+
+  media: MediaItem[];
+
+  mediaCount: number;
+
+  skills?: string[];
+
+  experience?: string;
+
+  availability?: string;
+
+};
+
+type ApiListing = Record<string, unknown>;
+
+const fallbackImages: Record<ListingType, string> = {
+
+  product:
+
+    "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=800&q=75",
+
+  hire:
+
+    "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=800&q=75",
+
+  service:
+
+    "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=75",
+
+  worker:
+
+    "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=75",
+
+  expert:
+
+    "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=800&q=75",
+
+};
+
+const typeOptions = [
+
+  { value: "all", label: "All listings" },
+
+  { value: "product", label: "For sale" },
+
+  { value: "hire", label: "Equipment for hire" },
+
+  { value: "service", label: "Farm services" },
+
+  { value: "worker", label: "Hire labourers" },
+
+  { value: "expert", label: "Hire experts" },
+
+];
+
+const typeLabels: Record<ListingType, string> = {
+
+  product: "For sale",
+
+  hire: "Equipment for hire",
+
+  service: "Farm service",
+
+  worker: "Labourer for hire",
+
+  expert: "Agricultural expert",
+
+};
+
+function GalleryModal({
+
+  listing,
+
+  activeIndex,
+
+  onChangeIndex,
+
+  onClose,
+
+}: {
+
+  listing: Listing;
+
+  activeIndex: number;
+
+  onChangeIndex: (index: number) => void;
+
+  onClose: () => void;
+
+}) {
+
+  const galleryMedia: MediaItem[] =
+
+    listing.media.length > 0
+
+      ? listing.media
+
+      : [{ url: listing.image, type: "image" }];
+
+  const safeIndex = Math.min(activeIndex, galleryMedia.length - 1);
+
+  const activeMedia = galleryMedia[safeIndex];
+
+  function moveGallery(direction: number) {
+
+    onChangeIndex(
+
+      (safeIndex + direction + galleryMedia.length) % galleryMedia.length
+
+    );
+
+  }
+
+  useEffect(() => {
+
+    function handleKeyDown(event: KeyboardEvent) {
+
+      if (event.key === "Escape") onClose();
+
+      if (event.key === "ArrowLeft" && galleryMedia.length > 1) moveGallery(-1);
+
+      if (event.key === "ArrowRight" && galleryMedia.length > 1) moveGallery(1);
+
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+
+  }, [safeIndex, galleryMedia.length, onClose]);
+
+  return (
+
+    <div
+
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 sm:p-6"
+
+      onClick={onClose}
+
+    >
+
+      <div
+
+        role="dialog"
+
+        aria-modal="true"
+
+        aria-label={`${listing.title} media gallery`}
+
+        className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#101710] text-white shadow-2xl"
+
+        onClick={(event) => event.stopPropagation()}
+
+      >
+
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-6">
+
+          <div className="min-w-0">
+
+            <h2 className="truncate text-base font-bold sm:text-lg">{listing.title}</h2>
+
+            <p className="mt-0.5 text-xs text-white/60">
+
+              {safeIndex + 1} of {galleryMedia.length} {galleryMedia.length === 1 ? "file" : "files"}
+
+            </p>
+
+          </div>
+
+          <button
+
+            type="button"
+
+            onClick={onClose}
+
+            aria-label="Close gallery"
+
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
+
+          >
+
+            <X size={21} />
+
+          </button>
+
+        </div>
+
+        <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black px-2 py-3 sm:px-10">
+
+          {activeMedia.type === "video" ? (
+
+            <video
+
+              key={activeMedia.url}
+
+              src={activeMedia.url}
+
+              controls
+
+              playsInline
+
+              preload="metadata"
+
+              className="max-h-[58vh] max-w-full rounded-lg"
+
+            />
+
+          ) : (
+
+            <img
+
+              key={activeMedia.url}
+
+              src={activeMedia.url}
+
+              alt={`${listing.title} image ${safeIndex + 1}`}
+
+              className="max-h-[58vh] max-w-full rounded-lg object-contain"
+
+            />
+
+          )}
+
+          {galleryMedia.length > 1 && (
+
+            <>
+
+              <button
+
+                type="button"
+
+                onClick={() => moveGallery(-1)}
+
+                aria-label="Previous media"
+
+                className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 backdrop-blur transition hover:bg-white/30 sm:left-5"
+
+              >
+
+                <ChevronLeft size={24} />
+
+              </button>
+
+              <button
+
+                type="button"
+
+                onClick={() => moveGallery(1)}
+
+                aria-label="Next media"
+
+                className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 backdrop-blur transition hover:bg-white/30 sm:right-5"
+
+              >
+
+                <ChevronRight size={24} />
+
+              </button>
+
+            </>
+
+          )}
+
+        </div>
+
+        {galleryMedia.length > 1 && (
+
+          <div className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-3 sm:px-6">
+
+            {galleryMedia.map((asset, index) => (
+
+              <button
+
+                key={`${asset.url}-${index}`}
+
+                type="button"
+
+                onClick={() => onChangeIndex(index)}
+
+                aria-label={`Show media ${index + 1}`}
+
+                aria-pressed={safeIndex === index}
+
+                className={`relative h-16 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
+
+                  safeIndex === index ? "border-[#D9A441]" : "border-white/15"
+
+                }`}
+
+              >
+
+                {asset.type === "video" ? (
+
+                  <span className="flex h-full w-full items-center justify-center bg-white/10">
+
+                    <Play size={20} />
+
+                  </span>
+
+                ) : (
+
+                  <img
+
+                    src={asset.url}
+
+                    alt=""
+
+                    className="h-full w-full object-cover"
+
+                  />
+
+                )}
+
+                {asset.type === "video" && (
+
+                  <span className="absolute bottom-1 right-1 rounded bg-black/70 p-1">
+
+                    <Video size={11} />
+
+                  </span>
+
+                )}
+
+              </button>
+
+            ))}
+
+          </div>
+
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-sm sm:px-6">
+
+          <p className="flex items-center gap-2 text-white/70">
+
+            <MapPin size={15} />
+
+            {listing.location}
+
+          </p>
+
+          <p className="font-bold text-[#E7B958]">
+
+            GHâ‚µ {listing.price.toLocaleString("en-GH")}
+
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  );
+
+}
+
+function ProductsBrowser() {
+
+  const searchParams = useSearchParams();
+
+  const [search, setSearch] = useState("");
+
+  const [type, setType] = useState("all");
+
+  const [category, setCategory] = useState("All categories");
+
+  const [subcategory, setSubcategory] = useState("All subcategories");
+
+const [location, setLocation] = useState("All locations");
+  const [maxPrice, setMaxPrice] = useState("5000");
+
+  const [showFilters, setShowFilters] = useState(false);
+
+  const [listings, setListings] = useState<Listing[]>([]);
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [loadError, setLoadError] = useState("");
+
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+
+  const [contactListing, setContactListing] = useState<Listing | null>(null);
+
+  const [inquiryMessage, setInquiryMessage] = useState("");
+
+  const [inquirySending, setInquirySending] = useState(false);
+
+  const [inquiryFeedback, setInquiryFeedback] = useState("");
+
+  const [inquiryFeedbackType, setInquiryFeedbackType] = useState<
+
+    "success" | "error" | ""
+
+  >("");
+
+  useEffect(() => {
+
+    let cancelled = false;
+
+    async function loadListings() {
+
+      setIsLoading(true);
+
+      setLoadError("");
+
+      try {
+
+        const response = await fetch("/api/listings", {
+
+          cache: "no-store",
+
+        });
+
+        if (!response.ok) {
+
+          throw new Error("Unable to load marketplace listings.");
+
+        }
+
+        const data: {
+
+          success?: boolean;
+
+          listings?: ApiListing[];
+
+          message?: string;
+
+        } = await response.json();
+
+        if (!data.success || !Array.isArray(data.listings)) {
+
+          throw new Error(
+
+            data.message || "The listings response was invalid."
+
+          );
+
+        }
+
+        const allowedTypes: ListingType[] = [
+
+          "product",
+
+          "hire",
+
+          "service",
+
+          "worker",
+
+          "expert",
+
+        ];
+
+        const mappedListings: Listing[] = data.listings
+
+          .filter((item) =>
+
+            allowedTypes.includes(item.type as ListingType)
+
+          )
+
+          .map((item, index) => {
+
+            const listingType = item.type as ListingType;
+
+            const skills = Array.isArray(item.skills)
+
+              ? item.skills.filter(
+
+                  (skill): skill is string =>
+
+                    typeof skill === "string"
+
+                )
+
+              : undefined;
+
+            const rawPrice = Number(item.price);
+
+            const uploadedMedia: MediaItem[] = [];
+
+            const seenMedia = new Set<string>();
+
+            function addMedia(url: unknown, mediaType: "image" | "video") {
+
+              if (typeof url !== "string" || !url.trim()) return;
+
+              const cleanUrl = url.trim();
+
+              if (seenMedia.has(cleanUrl)) return;
+
+              seenMedia.add(cleanUrl);
+
+              uploadedMedia.push({ url: cleanUrl, type: mediaType });
+
+            }
+
+            if (Array.isArray(item.media)) {
+
+              for (const entry of item.media) {
+
+                if (typeof entry === "string") {
+
+                  const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(entry);
+
+                  addMedia(entry, isVideo ? "video" : "image");
+
+                  continue;
+
+                }
+
+                if (!entry || typeof entry !== "object") continue;
+
+                const asset = entry as Record<string, unknown>;
+
+                const url =
+
+                  typeof asset.secure_url === "string"
+
+                    ? asset.secure_url
+
+                    : typeof asset.url === "string"
+
+                      ? asset.url
+
+                      : typeof asset.src === "string"
+
+                        ? asset.src
+
+                        : "";
+
+                const mediaType =
+
+                  asset.type === "video" || asset.resource_type === "video"
+
+                    ? "video"
+
+                    : "image";
+
+                addMedia(url, mediaType);
+
+              }
+
+            }
+
+            if (Array.isArray(item.images)) {
+
+              for (const url of item.images) addMedia(url, "image");
+
+            }
+
+            if (Array.isArray(item.videos)) {
+
+              for (const url of item.videos) addMedia(url, "video");
+
+            }
+
+            addMedia(item.image, "image");
+
+            return {
+
+              id: String(
+
+                item.id ??
+
+                  item._id ??
+
+                  `${item.title ?? "listing"}-${index}`
+
+              ),
+
+              title: String(item.title ?? "Untitled listing"),
+
+              type: listingType,
+
+              category: String(item.category ?? "Other"),
+
+              subcategory:
+                typeof item.subcategory === "string" ? item.subcategory : "",
+
+              specifications:
+                item.specifications &&
+                typeof item.specifications === "object" &&
+                !Array.isArray(item.specifications)
+                  ? (item.specifications as Record<string, unknown>)
+                  : {},
+
+              description: String(
+
+                item.description ?? "No description provided."
+
+              ),
+
+              price:
+
+                Number.isFinite(rawPrice) && rawPrice >= 0
+
+                  ? rawPrice
+
+                  : 0,
+
+              priceUnit: String(
+
+                item.priceUnit ?? item.unit ?? "Price to be confirmed"
+
+              ),
+
+              location: String(
+
+                item.location ?? "Location not specified"
+
+              ),
+
+              seller: String(
+
+                item.seller ?? "Seller not specified"
+
+              ),
+
+              image:
+
+                uploadedMedia.find((asset) => asset.type === "image")?.url ??
+
+                fallbackImages[listingType],
+
+              media: uploadedMedia,
+
+              mediaCount: uploadedMedia.length,
+
+              skills,
+
+              experience:
+
+                typeof item.experience === "string"
+
+                  ? item.experience
+
+                  : undefined,
+
+              availability:
+
+                typeof item.availability === "string"
+
+                  ? item.availability
+
+                  : undefined,
+
+            };
+
+          });
+
+        if (!cancelled) {
+
+          setListings(mappedListings);
+
+        }
+
+      } catch (error) {
+
+        if (!cancelled) {
+
+          setLoadError(
+
+            error instanceof Error
+
+              ? error.message
+
+              : "Something went wrong while loading listings."
+
+          );
+
+        }
+
+      } finally {
+
+        if (!cancelled) {
+
+          setIsLoading(false);
+
+        }
+
+      }
+
+    }
+
+    loadListings();
+
+    return () => {
+
+      cancelled = true;
+
+    };
+
+  }, []);
+
+  const availableCategories = useMemo(
+
+    () => [
+
+      "All categories",
+
+      ...Array.from(
+
+        new Set(listings.map((listing) => listing.category))
+
+      ).sort(),
+
+    ],
+
+    [listings]
+
+  );
+
+  const availableSubcategories = useMemo(
+    () => [
+      "All subcategories",
+      ...Array.from(
+        new Set(
+          listings
+            .map((listing) => listing.subcategory?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+      ).sort(),
+    ],
+    [listings]
+  );
+
+  const availableLocations = useMemo(
+
+    () => [
+
+      "All locations",
+
+      ...Array.from(
+
+        new Set(listings.map((listing) => listing.location))
+
+      ).sort(),
+
+    ],
+
+    [listings]
+
+  );
+
+  useEffect(() => {
+
+    setSearch(searchParams.get("q") ?? "");
+
+    const requestedType = searchParams.get("type");
+
+    const validTypes = typeOptions.map((option) => option.value);
+
+    setType(
+
+      requestedType && validTypes.includes(requestedType)
+
+        ? requestedType
+
+        : "all"
+
+    );
+
+    const requestedCategory = searchParams.get("category");
+
+    if (requestedCategory) {
+
+      const matchingCategory = availableCategories.find(
+
+        (item) =>
+
+          item.toLowerCase() === requestedCategory.toLowerCase()
+
+      );
+
+      if (matchingCategory) {
+
+        setCategory(matchingCategory);
+
+      }
+
+    } else {
+
+      setCategory("All categories");
+
+    }
+
+  }, [searchParams, availableCategories]);
+
+  const filteredListings = useMemo(() => {
+
+    const term = search.trim().toLowerCase();
+
+    const priceLimit =
+
+      maxPrice.trim() === "" ? Infinity : Number(maxPrice);
+
+    return listings.filter((listing) => {
+
+      const searchableText = [
+
+        listing.title,
+
+        listing.category,
+
+        listing.subcategory ?? "",
+
+        ...Object.entries(listing.specifications ?? {}).flatMap(([key, value]) => [key, String(value ?? "")]),
+
+        listing.description,
+
+        listing.seller,
+
+        listing.location,
+
+        ...(listing.skills ?? []),
+
+      ]
+
+        .join(" ")
+
+        .toLowerCase();
+
+      const matchesSearch =
+
+        !term || searchableText.includes(term);
+
+      const matchesType =
+
+        type === "all" || listing.type === type;
+
+      const matchesCategory =
+
+        category === "All categories" ||
+
+        listing.category === category;
+
+      const matchesSubcategory =
+        subcategory === "All subcategories" || listing.subcategory === subcategory;
+
+      const matchesLocation =
+
+        location === "All locations" ||
+
+        listing.location === location;
+
+      const matchesPrice =
+
+        Number.isFinite(priceLimit) &&
+
+        priceLimit >= 0 &&
+
+        listing.price <= priceLimit;
+
+      return (
+
+        matchesSearch &&
+
+        matchesType &&
+
+        matchesCategory &&
+
+        matchesSubcategory &&
+
+        matchesLocation &&
+
+        matchesPrice
+
+      );
+
+    });
+
+  }, [listings, search, type, category, subcategory, location, maxPrice]);
+
+  function resetFilters() {
+
+    setSearch("");
+
+    setType("all");
+
+    setCategory("All categories");
+
+    setSubcategory("All subcategories");
+
+    setLocation("All locations");
+
+    setMaxPrice("5000");
+
+  }
+
+  function openGallery(listing: Listing) {
+
+    setSelectedListing(listing);
+
+    setActiveMediaIndex(0);
+
+  }
+
+  function closeGallery() {
+
+    setSelectedListing(null);
+
+    setActiveMediaIndex(0);
+
+  }
+
+  async function submitInquiry(event: FormEvent<HTMLFormElement>) {
+
+    event.preventDefault();
+
+    if (!contactListing || inquirySending) return;
+
+    const message = inquiryMessage.trim();
+
+    if (message.length < 10) {
+
+      setInquiryFeedback("Please enter at least 10 characters.");
+
+      setInquiryFeedbackType("error");
+
+      return;
+
+    }
+
+    setInquirySending(true);
+
+    setInquiryFeedback("");
+
+    setInquiryFeedbackType("");
+
+    try {
+
+      const response = await fetch("/api/inquiries", {
+
+        method: "POST",
+
+        headers: { "Content-Type": "application/json" },
+
+        credentials: "include",
+
+        body: JSON.stringify({
+
+          listingId: contactListing.id,
+
+          message,
+
+        }),
+
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+
+        setInquiryFeedback("Please log in before contacting a seller.");
+
+        setInquiryFeedbackType("error");
+
+        return;
+
+      }
+
+      if (!response.ok) {
+
+        throw new Error(data.error || "Unable to send your inquiry.");
+
+      }
+
+      setInquiryFeedback(
+
+        data.message || "Your inquiry has been sent successfully."
+
+      );
+
+      setInquiryFeedbackType("success");
+
+      setInquiryMessage("");
+
+    } catch (error) {
+
+      setInquiryFeedback(
+
+        error instanceof Error
+
+          ? error.message
+
+          : "Something went wrong while sending your inquiry."
+
+      );
+
+      setInquiryFeedbackType("error");
+
+    } finally {
+
+      setInquirySending(false);
+
+    }
+
+  }
+
+  function getListingIcon(listingType: ListingType) {
+
+    switch (listingType) {
+
+      case "product":
+
+        return <ShoppingBag size={16} />;
+
+      case "hire":
+
+        return <Tractor size={16} />;
+
+      case "service":
+
+        return <Wrench size={16} />;
+
+      case "worker":
+
+        return <Users size={16} />;
+
+      case "expert":
+
+        return <GraduationCap size={16} />;
+
+    }
+
+  }
+
+  return (
+
+    <main className="min-h-screen bg-[#F8F6EE] text-[#193D2A]">
+
+      <div className="bg-[#17472D] px-4 py-2 text-center text-xs font-medium text-white sm:text-sm">
+
+        AgriVanta Marketplace â€” Products, Workers and Agricultural Experts
+
+      </div>
+
+      <header className="border-b border-[#E7E4D9] bg-white">
+
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+
+          <a href="/" className="flex items-center gap-3">
+
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#17472D] text-[#D9A441]">
+
+              <ShoppingBag size={24} />
+
+            </span>
+
+            <span>
+
+              <span className="block text-xl font-extrabold">
+
+                AgriVanta
+
+              </span>
+
+              <span className="text-xs text-[#718071]">
+
+                Marketplace
+
+              </span>
+
+            </span>
+
+          </a>
+
+          <div className="flex items-center gap-3">
+
+            <a
+
+              href="/"
+
+              className="hidden text-sm font-semibold hover:text-[#9B741F] sm:inline"
+
+            >
+
+              Homepage
+
+            </a>
+
+            <a
+
+              href="/register?role=seller"
+
+              className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#235B3A]"
+
+            >
+
+              <Store size={16} />
+
+              Join AgriVanta
+
+            </a>
+
+          </div>
+
+        </div>
+
+      </header>
+
+      <section className="bg-[#17472D] px-4 py-12 text-white sm:py-16">
+
+        <div className="mx-auto max-w-7xl">
+
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E6BD57]">
+
+            Discover agricultural opportunities
+
+          </p>
+
+          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold sm:text-5xl">
+
+            Find what your farm needs.
+
+          </h1>
+
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
+
+            Buy agricultural products, hire equipment, find farm
+
+            labourers, or connect with agricultural professionals.
+
+            Explore opportunities across the agricultural value chain.
+
+          </p>
+
+          <form
+
+            onSubmit={(event) => event.preventDefault()}
+
+            className="mt-7 flex max-w-2xl flex-col gap-2 rounded-xl bg-white p-2 sm:flex-row"
+
+          >
+
+            <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
+
+              <Search
+
+                size={20}
+
+                className="shrink-0 text-[#64806C]"
+
+              />
+
+              <input
+
+                type="search"
+
+                value={search}
+
+                onChange={(event) => setSearch(event.target.value)}
+
+                placeholder="Search workers, skills, crops or equipment..."
+
+                aria-label="Search marketplace listings"
+
+                className="min-w-0 flex-1 py-3 text-sm text-[#193D2A] outline-none placeholder:text-gray-500"
+
+              />
+
+              {search && (
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setSearch("")}
+
+                  aria-label="Clear search"
+
+                  className="text-gray-500 hover:text-gray-900"
+
+                >
+
+                  <X size={17} />
+
+                </button>
+
+              )}
+
+            </label>
+
+            <button
+
+              type="submit"
+
+              className="rounded-lg bg-[#D9A441] px-6 py-3 font-bold text-[#173B27] hover:bg-[#E7B958]"
+
+            >
+
+              Search
+
+            </button>
+
+          </form>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+
+            <button
+
+              type="button"
+
+              onClick={() => setType("worker")}
+
+              className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-4 py-3 text-sm font-semibold hover:bg-white/10"
+
+            >
+
+              <Users size={17} />
+
+              Find farm labourers
+
+            </button>
+
+            <button
+
+              type="button"
+
+              onClick={() => setType("expert")}
+
+              className="inline-flex items-center gap-2 rounded-lg bg-[#D9A441] px-4 py-3 text-sm font-semibold text-[#173B27] hover:bg-[#E7B958]"
+
+            >
+
+              <GraduationCap size={17} />
+
+              Find agricultural experts
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
+
+          <div>
+
+            <h2 className="text-2xl font-extrabold">
+
+              Explore the marketplace
+
+            </h2>
+
+            <p className="mt-1 text-sm text-[#718071]">
+
+              Find products, people and services for your farm.
+
+            </p>
+
+          </div>
+
+          <button
+
+            type="button"
+
+            onClick={() => setShowFilters(!showFilters)}
+
+            aria-expanded={showFilters}
+
+            className="inline-flex items-center gap-2 rounded-lg border border-[#D9DED4] bg-white px-4 py-2.5 text-sm font-semibold hover:bg-[#F1F2E8]"
+
+          >
+
+            <SlidersHorizontal size={17} />
+
+            {showFilters ? "Hide filters" : "Show filters"}
+
+          </button>
+
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+
+          {typeOptions.map((option) => (
+
+            <button
+
+              key={option.value}
+
+              type="button"
+
+              onClick={() => setType(option.value)}
+
+              aria-pressed={type === option.value}
+
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+
+                type === option.value
+
+                  ? "border-[#17472D] bg-[#17472D] text-white"
+
+                  : "border-[#D9DED4] bg-white text-[#526755] hover:border-[#17472D]"
+
+              }`}
+
+            >
+
+              {option.label}
+
+            </button>
+
+          ))}
+
+        </div>
+
+        {showFilters && (
+
+          <div className="mt-5 grid gap-4 rounded-xl border border-[#E7E4D9] bg-white p-5 sm:grid-cols-2 lg:grid-cols-5">
+
+            <label className="text-sm font-semibold">
+
+              Category
+
+              <select
+
+                value={category}
+
+                onChange={(event) => setCategory(event.target.value)}
+
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] bg-white px-3 py-3 font-normal outline-none focus:border-[#17472D]"
+
+              >
+
+                {availableCategories.map((item) => (
+
+                  <option key={item} value={item}>
+
+                    {item}
+
+                  </option>
+
+                ))}
+
+              </select>
+
+            </label>
+
+            <label className="text-sm font-semibold">
+              Subcategory
+              <select
+                value={subcategory}
+                onChange={(event) => setSubcategory(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] bg-white px-3 py-3 font-normal outline-none focus:border-[#17472D]"
+              >
+                {availableSubcategories.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-semibold">
+
+              Location
+
+              <select
+
+                value={location}
+
+                onChange={(event) => setLocation(event.target.value)}
+
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] bg-white px-3 py-3 font-normal outline-none focus:border-[#17472D]"
+
+              >
+
+                {availableLocations.map((item) => (
+
+                  <option key={item} value={item}>
+
+                    {item}
+
+                  </option>
+
+                ))}
+
+              </select>
+
+            </label>
+
+            <label className="text-sm font-semibold">
+
+              Maximum rate or price (GHâ‚µ)
+
+              <input
+
+                type="number"
+
+                min="0"
+
+                value={maxPrice}
+
+                onChange={(event) => setMaxPrice(event.target.value)}
+
+                className="mt-2 w-full rounded-lg border border-[#D9DED4] px-3 py-3 font-normal outline-none focus:border-[#17472D]"
+
+              />
+
+            </label>
+
+            <div className="flex items-end">
+
+              <button
+
+                type="button"
+
+                onClick={resetFilters}
+
+                className="w-full rounded-lg border border-[#D9DED4] px-4 py-3 text-sm font-bold hover:bg-[#F1F2E8]"
+
+              >
+
+                Clear all filters
+
+              </button>
+
+            </div>
+
+          </div>
+
+        )}
+
+        {loadError && (
+
+          <div
+
+            role="alert"
+
+            className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+
+          >
+
+            {loadError} Please refresh the page to try again.
+
+          </div>
+
+        )}
+
+        {isLoading ? (
+
+          <div className="mt-8 rounded-xl border border-[#E7E4D9] bg-white px-5 py-14 text-center text-sm text-[#718071]">
+
+            Loading listings from AgriVanta...
+
+          </div>
+
+        ) : (
+
+          <>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-2 text-sm">
+
+              <p className="text-[#526755]">
+
+                <span className="font-extrabold">
+
+                  {filteredListings.length}
+
+                </span>{" "}
+
+                {filteredListings.length === 1
+
+                  ? "listing"
+
+                  : "listings"}{" "}
+
+                found
+
+              </p>
+
+              <span className="text-xs text-[#718071]">
+
+                Listings from the AgriVanta marketplace database
+
+              </span>
+
+            </div>
+
+            {filteredListings.length > 0 ? (
+
+              <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+
+                {filteredListings.map((listing) => (
+
+                  <article
+
+                    key={listing.id}
+
+                    className="overflow-hidden rounded-xl border border-[#E7E4D9] bg-white transition hover:-translate-y-1 hover:shadow-lg"
+
+                  >
+
+                    <div className="relative h-52 overflow-hidden bg-[#EAF0E6]">
+
+                      <button
+
+                        type="button"
+
+                        onClick={() => openGallery(listing)}
+
+                        aria-label={`Open image and video gallery for ${listing.title}`}
+
+                        className="group relative block h-full w-full text-left"
+
+                      >
+
+                        {listing.media[0]?.type === "video" ? (
+
+                          <video
+
+                            src={listing.media[0].url}
+
+                            muted
+
+                            playsInline
+
+                            preload="metadata"
+
+                            className="h-full w-full object-cover"
+
+                          />
+
+                        ) : (
+
+                          <img
+
+                            src={listing.image}
+
+                            alt={listing.title}
+
+                            loading="lazy"
+
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+
+                          />
+
+                        )}
+
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
+
+                          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#17472D] shadow-lg">
+
+                            {listing.media[0]?.type === "video" ? (
+
+                              <Play size={22} fill="currentColor" />
+
+                            ) : (
+
+                              <Camera size={22} />
+
+                            )}
+
+                          </span>
+
+                        </span>
+
+                      </button>
+
+                      <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-white px-3 py-1.5 text-xs font-bold text-[#17472D]">
+
+                        {typeLabels[listing.type]}
+
+                      </span>
+
+                      <span className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-black/65 px-2.5 py-1.5 text-xs font-medium text-white">
+
+                        {listing.media.some((asset) => asset.type === "video") ? (
+
+                          <Video size={14} />
+
+                        ) : (
+
+                          <Camera size={14} />
+
+                        )}
+
+                        {listing.mediaCount} {listing.mediaCount === 1 ? "file" : "files"}
+
+                      </span>
+
+                    </div>
+
+                    <div className="p-5">
+
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#9B741F]">
+
+                        {listing.category}
+                      </p>
+                      {listing.subcategory && (
+                        <p className="mt-1 text-xs font-semibold text-[#526755]">
+                          {listing.subcategory}
+                        </p>
+                      )}
+
+                      <h3 className="mt-2 text-lg font-extrabold">
+
+                        {listing.title}
+
+                      </h3>
+
+                      <p className="mt-2 min-h-[60px] text-sm leading-6 text-[#647367]">
+
+                        {listing.description}
+
+                      </p>
+
+                      {listing.specifications &&
+                        Object.entries(listing.specifications).some(([, value]) =>
+                          value !== null && value !== undefined && String(value).trim() !== ""
+                        ) && (
+                          <div className="mt-3 rounded-lg border border-[#E7E4D9] bg-[#FCFCF8] p-3">
+                            <p className="text-xs font-bold uppercase tracking-wide text-[#17472D]">Product specifications</p>
+                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
+                              {Object.entries(listing.specifications)
+                                .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+                                .slice(0, 6)
+                                .map(([key, value]) => (
+                                  <div key={key} className="min-w-0">
+                                    <dt className="text-[10px] capitalize text-[#718071]">
+                                      {key.replace(/([A-Z])/g, " $1").replace(/[_-]/g, " ")}
+                                    </dt>
+                                    <dd className="break-words text-xs font-semibold text-[#263D2D]">
+                                      {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                                    </dd>
+                                  </div>
+                                ))}
+                            </dl>
+                          </div>
+                        )}
+
+                      {(listing.type === "worker" ||
+
+                        listing.type === "expert") && (
+
+                        <div className="mt-4 space-y-3 rounded-lg bg-[#F3F5EF] p-3">
+
+                          {listing.skills &&
+
+                            listing.skills.length > 0 && (
+
+                              <div>
+
+                                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#17472D]">
+
+                                  <BriefcaseBusiness size={14} />
+
+                                  Skills and services
+
+                                </p>
+
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+
+                                  {listing.skills.map((skill) => (
+
+                                    <span
+
+                                      key={skill}
+
+                                      className="rounded-full border border-[#D9DED4] bg-white px-2.5 py-1 text-xs text-[#526755]"
+
+                                    >
+
+                                      {skill}
+
+                                    </span>
+
+                                  ))}
+
+                                </div>
+
+                              </div>
+
+                            )}
+
+                          {listing.experience && (
+
+                            <p className="flex items-start gap-2 text-xs leading-5 text-[#526755]">
+
+                              <GraduationCap
+
+                                size={15}
+
+                                className="mt-0.5 shrink-0"
+
+                              />
+
+                              <span>
+
+                                <strong>
+
+                                  Experience / credentials:
+
+                                </strong>{" "}
+
+                                {listing.experience}
+
+                              </span>
+
+                            </p>
+
+                          )}
+
+                          {listing.availability && (
+
+                            <p className="flex items-start gap-2 text-xs leading-5 text-[#526755]">
+
+                              <Clock
+
+                                size={15}
+
+                                className="mt-0.5 shrink-0"
+
+                              />
+
+                              <span>{listing.availability}</span>
+
+                            </p>
+
+                          )}
+
+                        </div>
+
+                      )}
+
+                      <div className="mt-4 border-t border-[#E7E4D9] pt-4">
+
+                        <p className="text-xl font-extrabold text-[#17472D]">
+
+                          GHâ‚µ {listing.price.toLocaleString("en-GH")}
+
+                        </p>
+
+                        <p className="mt-1 text-xs text-[#718071]">
+
+                          {listing.priceUnit}
+
+                        </p>
+
+                      </div>
+
+                      <p className="mt-4 flex items-center gap-2 text-sm text-[#647367]">
+
+                        <MapPin size={16} className="shrink-0" />
+
+                        {listing.location}
+
+                      </p>
+
+                      <p className="mt-3 flex items-center gap-2 text-sm text-[#647367]">
+
+                        <UserRound size={16} className="shrink-0" />
+
+                        {listing.seller}
+
+                      </p>
+
+                      <div className="mt-4 flex items-start gap-2 rounded-lg bg-[#FCF6E6] p-3">
+
+                        <Info
+
+                          size={16}
+
+                          className="mt-0.5 shrink-0 text-[#8B681C]"
+
+                        />
+
+                        <p className="text-xs leading-5 text-[#6C5729]">
+
+                          Demonstration listing. Seller identity,
+
+                          qualifications, rates and availability have
+
+                          not been independently verified.
+
+                        </p>
+
+                      </div>
+
+                      <button
+
+                        type="button"
+
+                        onClick={() => {
+
+                          setContactListing(listing);
+
+                          setInquiryMessage("");
+
+                          setInquiryFeedback("");
+
+                          setInquiryFeedbackType("");
+
+                        }}
+
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]"
+
+                      >
+
+                        {listing.type === "worker" ||
+
+                        listing.type === "expert"
+
+                          ? "Request to hire"
+
+                          : listing.type === "hire"
+
+                            ? "Request equipment"
+
+                            : listing.type === "service"
+
+                              ? "Request service"
+
+                              : "Contact seller"}
+
+                        <ArrowRight size={16} />
+
+                      </button>
+
+                    </div>
+
+                  </article>
+
+                ))}
+
+              </div>
+
+            ) : (
+
+              <div className="mt-8 rounded-xl border border-dashed border-[#C9D3C4] bg-white px-5 py-14 text-center">
+
+                <Search
+
+                  size={32}
+
+                  className="mx-auto text-[#718071]"
+
+                />
+
+                <h3 className="mt-4 text-lg font-bold">
+
+                  No matching listings
+
+                </h3>
+
+                <p className="mt-2 text-sm text-[#718071]">
+
+                  Try another search term or clear some filters.
+
+                </p>
+
+                <button
+
+                  type="button"
+
+                  onClick={resetFilters}
+
+                  className="mt-5 rounded-lg bg-[#17472D] px-5 py-3 text-sm font-bold text-white hover:bg-[#235B3A]"
+
+                >
+
+                  Reset filters
+
+                </button>
+
+              </div>
+
+            )}
+
+          </>
+
+        )}
+
+      </section>
+
+      {selectedListing && (
+
+        <GalleryModal
+
+          listing={selectedListing}
+
+          activeIndex={activeMediaIndex}
+
+          onChangeIndex={setActiveMediaIndex}
+
+          onClose={closeGallery}
+
+        />
+
+      )}
+
+      {contactListing && (
+
+        <div
+
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4"
+
+          onClick={() => {
+
+            if (!inquirySending) setContactListing(null);
+
+          }}
+
+        >
+
+          <section
+
+            role="dialog"
+
+            aria-modal="true"
+
+            aria-labelledby="contact-seller-title"
+
+            className="w-full max-w-lg rounded-2xl bg-white p-5 text-[#193D2A] shadow-2xl sm:p-7"
+
+            onClick={(event) => event.stopPropagation()}
+
+          >
+
+            <div className="flex items-start justify-between gap-4">
+
+              <div>
+
+                <p className="text-xs font-bold uppercase tracking-wider text-[#9B741F]">
+
+                  AgriVanta inquiries
+
+                </p>
+
+                <h2
+
+                  id="contact-seller-title"
+
+                  className="mt-1 text-xl font-extrabold text-[#17472D]"
+
+                >
+
+                  {contactListing.type === "worker" ||
+
+                  contactListing.type === "expert"
+
+                    ? "Request to hire"
+
+                    : contactListing.type === "hire"
+
+                      ? "Request equipment"
+
+                      : contactListing.type === "service"
+
+                        ? "Request service"
+
+                        : "Contact seller"}
+
+                </h2>
+
+                <p className="mt-1 text-sm text-[#647367]">
+
+                  Send a message about this listing.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                onClick={() => setContactListing(null)}
+
+                disabled={inquirySending}
+
+                aria-label="Close contact form"
+
+                className="rounded-full p-2 text-[#647367] hover:bg-[#F3F5EF] disabled:opacity-50"
+
+              >
+
+                <X size={20} />
+
+              </button>
+
+            </div>
+
+            <div className="mt-5 rounded-xl bg-[#F3F5EF] p-4">
+
+              <p className="text-sm font-bold text-[#17472D]">
+
+                {contactListing.title}
+
+              </p>
+
+              <p className="mt-1 text-xs text-[#647367]">
+
+                {contactListing.seller} Â· {contactListing.location}
+
+              </p>
+
+              <p className="mt-2 text-sm font-semibold text-[#17472D]">
+
+                GHâ‚µ {contactListing.price.toLocaleString("en-GH")}
+
+                {contactListing.priceUnit ? ` Â· ${contactListing.priceUnit}` : ""}
+
+              </p>
+
+            </div>
+
+            {inquiryFeedback && (
+
+              <div
+
+                role={inquiryFeedbackType === "error" ? "alert" : "status"}
+
+                className={`mt-4 rounded-lg p-3 text-sm ${
+
+                  inquiryFeedbackType === "success"
+
+                    ? "bg-[#EAF0E6] text-[#17472D]"
+
+                    : "bg-red-50 text-red-700"
+
+                }`}
+
+              >
+
+                {inquiryFeedback}
+
+                {inquiryFeedbackType === "error" &&
+
+                  inquiryFeedback.toLowerCase().includes("log in") && (
+
+                    <>
+
+                      {" "}
+
+                      <a href="/login" className="font-bold underline">
+
+                        Log in
+
+                      </a>
+
+                    </>
+
+                  )}
+
+              </div>
+
+            )}
+
+            {inquiryFeedbackType !== "success" && (
+
+              <form onSubmit={submitInquiry} className="mt-4 space-y-4">
+
+                <label
+
+                  htmlFor="inquiry-message"
+
+                  className="block text-sm font-semibold text-[#263D2D]"
+
+                >
+
+                  Your message
+
+                </label>
+
+                <textarea
+
+                  id="inquiry-message"
+
+                  value={inquiryMessage}
+
+                  onChange={(event) => setInquiryMessage(event.target.value)}
+
+                  required
+
+                  minLength={10}
+
+                  maxLength={3000}
+
+                  rows={5}
+
+                  placeholder="Ask about availability, price, delivery, or other details..."
+
+                  className="w-full resize-y rounded-xl border border-[#D9DED4] px-4 py-3 text-sm outline-none transition focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+
+                />
+
+                <p className="text-xs text-[#718071]">
+
+                  Enter 10â€“3000 characters. Your message will appear in the recipient's inquiry inbox.
+
+                </p>
+
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => setContactListing(null)}
+
+                    disabled={inquirySending}
+
+                    className="rounded-lg border border-[#D9DED4] px-4 py-3 text-sm font-bold text-[#526755] hover:bg-[#F7F8F4] disabled:opacity-50"
+
+                  >
+
+                    Cancel
+
+                  </button>
+
+                  <button
+
+                    type="submit"
+
+                    disabled={inquirySending || inquiryMessage.trim().length < 10}
+
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#17472D] px-5 py-3 text-sm font-bold text-white hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-60"
+
+                  >
+
+                    <Send size={16} />
+
+                    {inquirySending ? "Sending..." : "Send inquiry"}
+
+                  </button>
+
+                </div>
+
+              </form>
+
+            )}
+
+            {inquiryFeedbackType === "success" && (
+
+              <button
+
+                type="button"
+
+                onClick={() => setContactListing(null)}
+
+                className="mt-5 w-full rounded-lg bg-[#17472D] px-5 py-3 text-sm font-bold text-white hover:bg-[#235B3A]"
+
+              >
+
+                Close
+
+              </button>
+
+            )}
+
+          </section>
+
+        </div>
+
+      )}
+
+      <section className="border-t border-[#E7E4D9] bg-white">
+
+        <div className="mx-auto grid max-w-7xl gap-5 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
+
+          <div className="flex gap-3">
+
+            <ShieldCheck
+
+              className="shrink-0 text-[#17472D]"
+
+              size={23}
+
+            />
+
+            <div>
+
+              <h3 className="font-bold">Build trust</h3>
+
+              <p className="mt-1 text-sm leading-6 text-[#718071]">
+
+                Review profiles, discuss terms and verify qualifications
+
+                before making hiring decisions.
+
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="flex gap-3">
+
+            <CalendarClock
+
+              className="shrink-0 text-[#17472D]"
+
+              size={23}
+
+            />
+
+            <div>
+
+              <h3 className="font-bold">Agree on availability</h3>
+
+              <p className="mt-1 text-sm leading-6 text-[#718071]">
+
+                Confirm work dates, job requirements, rates and
+
+                availability before arranging a booking.
+
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="flex gap-3">
+
+            <Wrench
+
+              className="shrink-0 text-[#17472D]"
+
+              size={23}
+
+            />
+
+            <div>
+
+              <h3 className="font-bold">Support the whole farm</h3>
+
+              <p className="mt-1 text-sm leading-6 text-[#718071]">
+
+                Connect with suppliers, labourers, equipment providers
+
+                and agricultural professionals.
+
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      <footer className="bg-[#103720] px-4 py-8 text-white">
+
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+
+            <a href="/" className="text-lg font-extrabold">
+
+              AgriVanta
+
+            </a>
+
+            <p className="mt-1 text-sm text-white/70">
+
+              Powering Every Link in Agriculture.
+
+            </p>
+
+          </div>
+
+          <a
+
+            href="/"
+
+            className="inline-flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white"
+
+          >
+
+            Back to homepage
+
+            <ArrowRight size={16} />
+
+          </a>
+
+        </div>
+
+      </footer>
+
+    </main>
+
+  );
+
+}
+
+export default function ProductsPage() {
+
+  return (
+
+    <Suspense
+
+      fallback={
+
+        <div className="min-h-screen bg-[#F8F6EE] p-10 text-center text-[#17472D]">
+
+          Loading marketplace...
+
+        </div>
+
+      }
+
+    >
+
+      <ProductsBrowser />
+
+    </Suspense>
+
+  );
+
+}
