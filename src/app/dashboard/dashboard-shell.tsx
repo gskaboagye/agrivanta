@@ -6,6 +6,8 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  MessageSquare,
+  MessageCircle,
   CheckCircle2,
   CircleHelp,
   Compass,
@@ -14,6 +16,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Plus,
   Search,
   ShoppingBag,
   Sprout,
@@ -25,7 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type AccountRole = "farmer" | "buyer" | "supplier" | "worker" | "expert";
 
@@ -45,6 +48,17 @@ type ListingPreview = {
   image: string;
   type: string;
   date: string;
+};
+
+type DashboardNotification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  listingId: string;
+  inquiryId: string;
+  read: boolean;
+  createdAt: string | Date | null;
 };
 
 type DashboardShellProps = {
@@ -95,7 +109,10 @@ const roleDetails: Record<
 const navigation = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Marketplace", href: "/products", icon: ShoppingBag },
+  { label: "Add Listing", href: "/dashboard/create-listing", icon: Plus, listingOnly: true },
   { label: "My Listings", href: "/dashboard/my-listings", icon: Package },
+  { label: "Messages", href: "/dashboard/messages", icon: MessageCircle },
+  { label: "Inquiries", href: "/dashboard/inquiries", icon: MessageSquare },
   { label: "My activity", href: "/dashboard#activity", icon: Activity },
 ];
 
@@ -256,7 +273,9 @@ function Sidebar({
           </p>
 
           <nav className="space-y-1">
-            {navigation.map((item) => {
+            {navigation
+              .filter((item) => !("listingOnly" in item) || user.role !== "buyer")
+              .map((item) => {
               const active =
                 (item.href === "/dashboard" && pathname === "/dashboard") ||
                 (item.href !== "/dashboard" &&
@@ -355,7 +374,104 @@ export default function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const router = useRouter();
+
+  async function loadNotifications() {
+    try {
+      const response = await fetch("/api/notifications", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setNotifications(
+        Array.isArray(data.notifications) ? data.notifications : []
+      );
+      setUnreadCount(
+        typeof data.unreadCount === "number" ? data.unreadCount : 0
+      );
+    } catch (error) {
+      console.error("Unable to load notifications:", error);
+    }
+  }
+
+  useEffect(() => {
+    void loadNotifications();
+
+    const interval = window.setInterval(() => {
+      void loadNotifications();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  async function markNotificationAsRead(notificationId: string) {
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to mark notification as read.");
+      }
+
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.id === notificationId
+            ? { ...notification, read: true }
+            : notification
+        )
+      );
+      setUnreadCount((count) => Math.max(0, count - 1));
+      const selectedNotification = notifications.find(
+        (notification) => notification.id === notificationId
+      );
+      router.push(
+        selectedNotification?.inquiryId
+          ? `/dashboard/messages/${selectedNotification.inquiryId}`
+          : "/dashboard/inquiries"
+      );
+    } catch (error) {
+      console.error(error);
+      await loadNotifications();
+    }
+  }
+
+  async function markAllNotificationsAsRead() {
+    setNotificationsLoading(true);
+
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to mark notifications as read.");
+      }
+
+      setNotifications((current) =>
+        current.map((notification) => ({ ...notification, read: true }))
+      );
+      setUnreadCount(0);
+    } catch (error) {
+      console.error(error);
+      await loadNotifications();
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }
 
   const details = roleDetails[user.role];
   const actions = roleActions[user.role];
@@ -436,15 +552,124 @@ export default function DashboardShell({
               />
             </label>
 
-            <button
-              type="button"
-              aria-label="Notifications"
-              title="Notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#e7eae2] text-[#657365] transition hover:bg-[#f5f7f2]"
-            >
-              <Bell size={18} />
-              <span className="absolute right-[9px] top-[8px] h-1.5 w-1.5 rounded-full bg-[#D9A441]" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+                aria-expanded={notificationsOpen}
+                title="Notifications"
+                onClick={() => {
+                  setNotificationsOpen((open) => !open);
+                  void loadNotifications();
+                }}
+                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#e7eae2] text-[#657365] transition hover:bg-[#f5f7f2]"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#D9A441] px-1 text-[10px] font-bold text-[#17472D]">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close notifications"
+                    className="fixed inset-0 z-40 cursor-default"
+                    onClick={() => setNotificationsOpen(false)}
+                  />
+
+                  <div className="absolute right-0 z-50 mt-3 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#e8ebe4] bg-white shadow-xl">
+                    <div className="flex items-center justify-between border-b border-[#edf0e9] px-4 py-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-[#17472D]">Notifications</h3>
+                        <p className="mt-1 text-[11px] text-[#879084]">
+                          {unreadCount} unread
+                        </p>
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          disabled={notificationsLoading}
+                          onClick={() => void markAllNotificationsAsRead()}
+                          className="text-[11px] font-semibold text-[#17472D] hover:underline disabled:opacity-50"
+                        >
+                          {notificationsLoading ? "Updating..." : "Mark all read"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-[360px] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="px-5 py-10 text-center">
+                          <Bell size={25} className="mx-auto text-[#a0aa9b]" />
+                          <p className="mt-3 text-sm font-semibold text-[#26372b]">
+                            No notifications yet
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-[#879084]">
+                            New inquiry notifications will appear here.
+                          </p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() => {
+                              setNotificationsOpen(false);
+                              if (!notification.read) {
+                                void markNotificationAsRead(notification.id);
+                              } else {
+                                router.push(
+                                  notification.inquiryId
+                                    ? `/dashboard/messages/${notification.inquiryId}`
+                                    : "/dashboard/inquiries"
+                                );
+                              }
+                            }}
+                            className={`flex w-full gap-3 border-b border-[#edf0e9] px-4 py-4 text-left transition hover:bg-[#f7f8f4] ${
+                              notification.read ? "bg-white" : "bg-[#F8F6EE]"
+                            }`}
+                          >
+                            <span
+                              className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                                notification.read ? "bg-transparent" : "bg-[#D9A441]"
+                              }`}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-xs font-bold text-[#26372b]">
+                                {notification.title}
+                              </span>
+                              <span className="mt-1 block text-xs leading-5 text-[#778071]">
+                                {notification.message}
+                              </span>
+                              <span className="mt-2 block text-[10px] text-[#9aa294]">
+                                {notification.createdAt
+                                  ? new Date(String(notification.createdAt)).toLocaleString("en-GH", {
+                                      dateStyle: "medium",
+                                      timeStyle: "short",
+                                    })
+                                  : "Recently"}
+                              </span>
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    <Link
+                      href="/dashboard/messages"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="block border-t border-[#edf0e9] px-4 py-3 text-center text-xs font-bold text-[#17472D] hover:bg-[#f5f7f2]"
+                    >
+                      View all messages
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="hidden h-8 w-px bg-[#e7eae2] sm:block" />
 

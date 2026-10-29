@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { MongoServerError } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
@@ -7,8 +8,6 @@ import {
   hashPassword,
   type AccountRole,
 } from "@/lib/auth";
-
-
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,18 +24,14 @@ export async function POST(request: Request) {
 
     const data = body as Record<string, unknown>;
 
-    const name =
-      typeof data.name === "string" ? data.name.trim() : "";
+    const name = typeof data.name === "string" ? data.name.trim() : "";
     const email =
       typeof data.email === "string"
         ? data.email.trim().toLowerCase()
         : "";
-    const phone =
-      typeof data.phone === "string" ? data.phone.trim() : "";
-    const password =
-      typeof data.password === "string" ? data.password : "";
-    const role =
-      typeof data.role === "string" ? data.role : "";
+    const phone = typeof data.phone === "string" ? data.phone.trim() : "";
+    const password = typeof data.password === "string" ? data.password : "";
+    const role = typeof data.role === "string" ? data.role : "";
 
     if (name.length < 2 || name.length > 80) {
       return NextResponse.json(
@@ -55,6 +50,13 @@ export async function POST(request: Request) {
     if (phone.length > 30) {
       return NextResponse.json(
         { success: false, message: "Phone number is too long." },
+        { status: 400 }
+      );
+    }
+
+    if (phone && !/^[+\d\s().-]+$/.test(phone)) {
+      return NextResponse.json(
+        { success: false, message: "Enter a valid phone number." },
         { status: 400 }
       );
     }
@@ -102,6 +104,8 @@ export async function POST(request: Request) {
       email,
       phone,
       role,
+      phonePublic: false,
+      whatsappEnabled: false,
       passwordHash,
       createdAt: now,
       updatedAt: now,
@@ -126,10 +130,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    if (
-      error instanceof MongoServerError &&
-      error.code === 11000
-    ) {
+    if (error instanceof MongoServerError && error.code === 11000) {
       return NextResponse.json(
         {
           success: false,

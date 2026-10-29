@@ -1,7 +1,8 @@
-
+﻿
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -22,6 +23,9 @@ import {
   GraduationCap,
   Clock,
   Users,
+  MessageCircle,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 type ListingType =
@@ -41,6 +45,7 @@ type Listing = {
   priceUnit: string;
   location: string;
   seller: string;
+  sellerProfileId: string | null;
   image: string;
   mediaCount: number;
   skills?: string[];
@@ -86,13 +91,23 @@ function ProductsBrowser() {
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
   const [category, setCategory] = useState("All categories");
-  const [location, setLocation] = useState("All locations");
+  const [location, setLocation] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState<
+    { display_name: string; name?: string; address?: Record<string, string> }[]
+  >([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [maxPrice, setMaxPrice] = useState("5000");
   const [showFilters, setShowFilters] = useState(false);
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [inquiryMessage, setInquiryMessage] = useState("");
+  const [sendingInquiry, setSendingInquiry] = useState(false);
+  const [inquiryNotice, setInquiryNotice] = useState("");
+  const [inquiryNoticeType, setInquiryNoticeType] = useState<"success" | "error">("success");
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +187,11 @@ function ProductsBrowser() {
               seller: String(
                 item.seller ?? "Seller not specified"
               ),
+              sellerProfileId:
+                typeof item.sellerProfileId === "string" &&
+                item.sellerProfileId.trim().length > 0
+                  ? item.sellerProfileId.trim()
+                  : null,
               image:
                 typeof item.image === "string" &&
                 item.image.trim().length > 0
@@ -228,15 +248,47 @@ function ProductsBrowser() {
     [listings]
   );
 
-  const availableLocations = useMemo(
-    () => [
-      "All locations",
-      ...Array.from(
-        new Set(listings.map((listing) => listing.location))
-      ).sort(),
-    ],
-    [listings]
-  );
+
+  useEffect(() => {
+    const query = location.trim();
+    if (query.length < 3 || query === "All locations") {
+      setLocationSuggestions([]);
+      setIsSearchingLocations(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearchingLocations(true);
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          format: "jsonv2",
+          addressdetails: "1",
+          limit: "5",
+          countrycodes: "gh",
+        });
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+          { signal: controller.signal, headers: { Accept: "application/json" } }
+        );
+        if (!response.ok) throw new Error("Location search unavailable");
+        const results = await response.json();
+        setLocationSuggestions(Array.isArray(results) ? results : []);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setLocationSuggestions([]);
+        }
+      } finally {
+        setIsSearchingLocations(false);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [location]);
 
   useEffect(() => {
     setSearch(searchParams.get("q") ?? "");
@@ -294,9 +346,12 @@ function ProductsBrowser() {
         category === "All categories" ||
         listing.category === category;
 
+      const locationTerm = location.trim().toLocaleLowerCase();
       const matchesLocation =
-        location === "All locations" ||
-        listing.location === location;
+        !locationTerm ||
+        locationTerm === "all locations" ||
+        listing.location.toLocaleLowerCase().includes(locationTerm) ||
+        locationTerm.includes(listing.location.toLocaleLowerCase());
 
       const matchesPrice =
         Number.isFinite(priceLimit) &&
@@ -313,11 +368,71 @@ function ProductsBrowser() {
     });
   }, [listings, search, type, category, location, maxPrice]);
 
+  function openInquiry(listing: Listing) {
+    setSelectedListing(listing);
+    setInquiryMessage("");
+    setInquiryNotice("");
+    setInquiryNoticeType("success");
+  }
+
+  function closeInquiry() {
+    if (sendingInquiry) return;
+    setSelectedListing(null);
+    setInquiryMessage("");
+    setInquiryNotice("");
+  }
+
+  async function submitInquiry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedListing) return;
+
+    const trimmedMessage = inquiryMessage.trim();
+    if (trimmedMessage.length < 10 || trimmedMessage.length > 3000) {
+      setInquiryNoticeType("error");
+      setInquiryNotice("Please enter a message between 10 and 3000 characters.");
+      return;
+    }
+
+    setSendingInquiry(true);
+    setInquiryNotice("");
+
+    try {
+      const response = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ listingId: selectedListing.id, message: trimmedMessage }),
+      });
+      const data: { error?: string; message?: string } = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        setInquiryNoticeType("error");
+        setInquiryNotice("Please log in before contacting a seller.");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(data.error || data.message || "Unable to send your inquiry. Please try again.");
+      }
+
+      setSelectedListing(null);
+      setInquiryMessage("");
+      setInquiryNoticeType("success");
+      setInquiryNotice("Your inquiry was sent successfully.");
+    } catch (error) {
+      setInquiryNoticeType("error");
+      setInquiryNotice(error instanceof Error ? error.message : "Unable to send your inquiry. Please try again.");
+    } finally {
+      setSendingInquiry(false);
+    }
+  }
+
   function resetFilters() {
     setSearch("");
     setType("all");
     setCategory("All categories");
-    setLocation("All locations");
+    setLocation("");
+    setLocationSuggestions([]);
+    setShowLocationSuggestions(false);
     setMaxPrice("5000");
   }
 
@@ -512,20 +627,69 @@ function ProductsBrowser() {
               </select>
             </label>
 
-            <label className="text-sm font-semibold">
-              Location
-              <select
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-[#D9DED4] bg-white px-3 py-3 font-normal outline-none focus:border-[#17472D]"
-              >
-                {availableLocations.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="relative text-sm font-semibold">
+              <label htmlFor="marketplace-location-search">Location</label>
+              <div className="relative mt-2">
+                <MapPin size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#718071]" />
+                <input
+                  id="marketplace-location-search"
+                  type="search"
+                  value={location}
+                  onChange={(event) => {
+                    setLocation(event.target.value);
+                    setShowLocationSuggestions(true);
+                  }}
+                  onFocus={() => setShowLocationSuggestions(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setShowLocationSuggestions(false);
+                    if (event.key === "Enter") setShowLocationSuggestions(false);
+                  }}
+                  placeholder="Search town, community or region"
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-[#D9DED4] bg-white py-3 pl-9 pr-10 font-normal outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                />
+                {location && (
+                  <button
+                    type="button"
+                    aria-label="Clear location search"
+                    onClick={() => {
+                      setLocation("");
+                      setLocationSuggestions([]);
+                      setShowLocationSuggestions(false);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#718071] hover:text-[#17472D]"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              {showLocationSuggestions && location.trim().length >= 3 && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[#D9DED4] bg-white text-sm font-normal shadow-xl">
+                  {isSearchingLocations && (
+                    <p className="px-3 py-3 text-[#718071]">Searching locations...</p>
+                  )}
+                  {!isSearchingLocations && locationSuggestions.length === 0 && (
+                    <p className="px-3 py-3 text-[#718071]">No geographic suggestions found. You can still use the text you typed to filter listings.</p>
+                  )}
+                  {locationSuggestions.map((suggestion, index) => (
+                    <button
+                      key={`${suggestion.display_name}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        const selectedLocation = suggestion.display_name;
+                        setLocation(selectedLocation);
+                        setShowLocationSuggestions(false);
+                      }}
+                      className="flex w-full items-start gap-2 border-b border-[#F0F0E8] px-3 py-3 text-left last:border-b-0 hover:bg-[#F3F5EF]"
+                    >
+                      <MapPin size={15} className="mt-0.5 shrink-0 text-[#17472D]" />
+                      <span>{suggestion.display_name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="mt-1 text-xs font-normal text-[#718071]">Leave blank to show all locations. Suggestions require an internet connection.</p>
+            </div>
 
             <label className="text-sm font-semibold">
               Maximum rate or price (GH₵)
@@ -686,7 +850,17 @@ function ProductsBrowser() {
 
                       <p className="mt-3 flex items-center gap-2 text-sm text-[#647367]">
                         <UserRound size={16} className="shrink-0" />
-                        {listing.seller}
+                        {listing.sellerProfileId ? (
+                          <a
+                            href={`/sellers/${encodeURIComponent(listing.sellerProfileId)}`}
+                            className="font-semibold text-[#17472D] underline-offset-4 hover:text-[#9B741F] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17472D] focus-visible:ring-offset-2 rounded-sm"
+                            aria-label={`View ${listing.seller} seller profile`}
+                          >
+                            {listing.seller}
+                          </a>
+                        ) : (
+                          <span>{listing.seller}</span>
+                        )}
                       </p>
 
                       <div className="mt-4 flex items-start gap-2 rounded-lg bg-[#FCF6E6] p-3">
@@ -703,9 +877,9 @@ function ProductsBrowser() {
 
                       <button
                         type="button"
-                        disabled
-                        title="Booking and contact functionality will be added in a later step"
-                        className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-[#E7E9E1] px-4 py-3 text-sm font-bold text-[#718071]"
+                        onClick={() => openInquiry(listing)}
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17472D] focus-visible:ring-offset-2"
+                        aria-label={`${listing.type === "worker" || listing.type === "expert" ? "Request to hire" : listing.type === "hire" ? "Request equipment" : listing.type === "service" ? "Request service" : "Contact seller"}: ${listing.title}`}
                       >
                         {listing.type === "worker" ||
                         listing.type === "expert"
@@ -745,6 +919,48 @@ function ProductsBrowser() {
           </>
         )}
       </section>
+
+      {inquiryNotice && !selectedListing && (
+        <div role="status" aria-live="polite" className={`fixed bottom-5 right-5 z-[60] flex max-w-md items-start gap-3 rounded-xl border bg-white p-4 shadow-xl ${inquiryNoticeType === "success" ? "border-[#C9D4C4] text-[#17472D]" : "border-red-200 text-red-700"}`}>
+          {inquiryNoticeType === "success" ? <CheckCircle2 size={20} className="mt-0.5 shrink-0" /> : <AlertCircle size={20} className="mt-0.5 shrink-0" />}
+          <p className="flex-1 text-sm font-medium">{inquiryNotice}</p>
+          {inquiryNoticeType === "error" && inquiryNotice.includes("log in") && <a href={`/login?redirect=${encodeURIComponent("/products")}`} className="shrink-0 font-bold underline underline-offset-2">Log in</a>}
+          <button type="button" onClick={() => setInquiryNotice("")} aria-label="Dismiss notification" className="text-current opacity-70 hover:opacity-100"><X size={17} /></button>
+        </div>
+      )}
+
+      {selectedListing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !sendingInquiry) closeInquiry(); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="marketplace-inquiry-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9B741F]">AgriVanta Marketplace</p>
+                <h2 id="marketplace-inquiry-title" className="mt-2 text-2xl font-extrabold text-[#17472D]">
+                  {selectedListing.type === "worker" || selectedListing.type === "expert" ? "Request to hire" : selectedListing.type === "hire" ? "Request equipment" : selectedListing.type === "service" ? "Request service" : "Contact seller"}
+                </h2>
+                <p className="mt-2 text-sm text-[#647367]">About: {selectedListing.title}</p>
+              </div>
+              <button type="button" onClick={closeInquiry} disabled={sendingInquiry} aria-label="Close inquiry form" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"><X size={20} /></button>
+            </div>
+
+            <form onSubmit={submitInquiry} className="mt-5 space-y-4">
+              <label htmlFor="marketplace-inquiry-message" className="block text-sm font-semibold text-[#17472D]">Your message</label>
+              <textarea id="marketplace-inquiry-message" value={inquiryMessage} onChange={(event) => setInquiryMessage(event.target.value)} minLength={10} maxLength={3000} rows={5} required placeholder="Introduce yourself and explain what you would like to know..." className="w-full rounded-xl border border-[#C9D4C4] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/15" />
+              <p className="text-right text-xs text-[#718071]">{inquiryMessage.length}/3000 characters</p>
+              {inquiryNotice && <p role="alert" className={`text-sm ${inquiryNoticeType === "success" ? "text-[#17472D]" : "text-red-700"}`}>
+                {inquiryNotice}{inquiryNoticeType === "error" && inquiryNotice.includes("log in") && <> <a href={`/login?redirect=${encodeURIComponent("/products")}`} className="font-bold underline underline-offset-2">Log in</a></>}
+              </p>}
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={closeInquiry} disabled={sendingInquiry} className="rounded-lg border border-[#D9DED4] px-4 py-2.5 text-sm font-semibold text-[#17472D] hover:bg-[#F1F2E8] disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={sendingInquiry || inquiryMessage.trim().length < 10} className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-60">
+                  {sendingInquiry ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <MessageCircle size={17} />}
+                  {sendingInquiry ? "Sending..." : "Send inquiry"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       <section className="border-t border-[#E7E4D9] bg-white">
         <div className="mx-auto grid max-w-7xl gap-5 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">

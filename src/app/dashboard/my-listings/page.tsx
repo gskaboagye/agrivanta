@@ -37,6 +37,8 @@ type Listing = {
   title: string;
   type: string;
   category: string;
+  subcategory?: string;
+  specifications?: Record<string, unknown>;
   description: string;
   location: string;
   price: number | string;
@@ -98,6 +100,7 @@ export default function MyListingsPage() {
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState("");
   const [editing, setEditing] = useState<Listing | null>(null);
+  const [specificationsText, setSpecificationsText] = useState("{}");
   const [notice, setNotice] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -139,8 +142,11 @@ export default function MyListingsPage() {
     setNotice("");
     setUploadError("");
     setUploadMessage("");
+    setSpecificationsText(JSON.stringify(listing.specifications ?? {}, null, 2));
     setEditing({
       ...listing,
+      subcategory: listing.subcategory ?? "",
+      specifications: listing.specifications ?? {},
       media: getListingMedia(listing),
     });
   }
@@ -325,6 +331,18 @@ export default function MyListingsPage() {
     setError("");
     setNotice("");
 
+    let parsedSpecifications: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(specificationsText || "{}") as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Specifications must be a JSON object.");
+      }
+      parsedSpecifications = parsed as Record<string, unknown>;
+    } catch {
+      setError("Specifications must be valid JSON in an object format, for example: {\"capacity\": \"100 kg\"}.");
+      return;
+    }
+
     const media = getListingMedia(editing);
     const images = media
       .filter((item) => item.type !== "video" && item.resource_type !== "video")
@@ -343,6 +361,8 @@ export default function MyListingsPage() {
         body: JSON.stringify({
           title: editing.title,
           category: editing.category,
+          subcategory: (editing.subcategory ?? "").trim(),
+          specifications: parsedSpecifications,
           description: editing.description,
           location: editing.location,
           price: Number(editing.price),
@@ -363,7 +383,7 @@ export default function MyListingsPage() {
       setListings((current) =>
         current.map((item) =>
           item.id === editing.id
-            ? { ...editing, image: images[0] || "", images, videos, media }
+            ? { ...editing, subcategory: (editing.subcategory ?? "").trim(), specifications: parsedSpecifications, image: images[0] || "", images, videos, media }
             : item
         )
       );
@@ -386,6 +406,7 @@ export default function MyListingsPage() {
       !value ||
       listing.title.toLowerCase().includes(value) ||
       listing.category.toLowerCase().includes(value) ||
+      (listing.subcategory ?? "").toLowerCase().includes(value) ||
       listing.location.toLowerCase().includes(value)
     );
   });
@@ -542,7 +563,7 @@ export default function MyListingsPage() {
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-[#879084]">
-                        {listing.category} · {listing.location} · {listing.type}
+                        {listing.category}{listing.subcategory ? ` / ${listing.subcategory}` : ""} · {listing.location} · {listing.type}
                       </p>
                       <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#697568]">
                         {listing.description}
@@ -621,6 +642,7 @@ export default function MyListingsPage() {
                   [
                     ["title", "Title"],
                     ["category", "Category"],
+                    ["subcategory", "Subcategory"],
                     ["location", "Location"],
                     ["price", "Price"],
                     ["priceUnit", "Price unit"],
@@ -648,6 +670,25 @@ export default function MyListingsPage() {
                   </label>
                 ))}
               </div>
+
+              <section className="mt-4 rounded-xl border border-[#e1e7dc] bg-[#fbfcf9] p-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-[#526252]">
+                    Agricultural specifications (JSON)
+                  </span>
+                  <p className="mb-2 text-xs leading-5 text-[#879084]">
+                    Edit the technical details for this listing. Keep the information inside a JSON object. Use double quotes around property names and text values.
+                  </p>
+                  <textarea
+                    rows={6}
+                    spellCheck={false}
+                    value={specificationsText}
+                    onChange={(event) => setSpecificationsText(event.target.value)}
+                    placeholder={'{\n  "capacity": "100 kg",\n  "material": "Steel"\n}'}
+                    className="w-full rounded-xl border border-[#e1e7dc] bg-white px-3 py-2.5 font-mono text-xs outline-none focus:border-[#17472D]"
+                  />
+                </label>
+              </section>
 
               <label className="mt-4 block">
                 <span className="mb-1.5 block text-xs font-semibold text-[#526252]">
