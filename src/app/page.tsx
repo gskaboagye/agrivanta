@@ -16,7 +16,6 @@
   Users,
   GraduationCap,
   Wrench,
-  CloudSun,
   BookOpen,
   Package,
 } from "lucide-react";
@@ -119,7 +118,6 @@ export default function Home() {
             <a href="/products" className="transition hover:text-[#9B741F]">Marketplace</a>
             <a href="#categories" className="transition hover:text-[#9B741F]">Categories</a>
             <a href="/agriguide" className="transition hover:text-[#9B741F]">AgriGuide</a>
-            <a href="/weather" className="transition hover:text-[#9B741F]">Weather</a>
             <a href="#how-it-works" className="transition hover:text-[#9B741F]">How it works</a>
           </nav>
 
@@ -280,34 +278,27 @@ export default function Home() {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9B741F]">Farm knowledge and technology</p>
             <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Useful tools for informed decisions</h2>
             <p className="mt-3 text-sm leading-7 text-[#647367] sm:text-base">
-              Explore weather information and agricultural learning resources alongside the marketplace.
+              Explore practical agricultural learning resources alongside the marketplace.
             </p>
           </div>
 
-          <div className="mt-7 grid gap-5 md:grid-cols-2">
-            <article className="rounded-2xl border border-[#E0E3D8] bg-white p-6 sm:p-7">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]"><CloudSun size={26} /></span>
-              <h3 className="mt-4 text-xl font-extrabold">Farm weather</h3>
-              <p className="mt-2 text-sm leading-6 text-[#647367]">
-                Check weather conditions and forecasts to help plan field work, planting and other farm activities.
-              </p>
-              <a href="/weather" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]">
-                View weather <ArrowRight size={16} />
-              </a>
-            </article>
-
-            <article className="rounded-2xl border border-[#E0E3D8] bg-white p-6 sm:p-7">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FCF2D9] text-[#8B681C]"><MessageCircle size={25} /></span>
-              <h3 className="mt-4 text-xl font-extrabold">AgriGuide</h3>
-              <p className="mt-2 text-sm leading-6 text-[#647367]">
-                Explore agricultural learning topics such as crop production, soil health, livestock care and farm business.
-              </p>
-              <a href="/agriguide" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]">
-                Open AgriGuide <ArrowRight size={16} />
-              </a>
-              <p className="mt-3 text-xs leading-5 text-[#718071]">
-                AI-powered answers require an active AI service connection. Advice should be checked against trusted local guidance.
-              </p>
+          <div className="mt-7 max-w-3xl">
+            <article className="rounded-2xl border border-[#E0E3D8] bg-white p-6 sm:p-8">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#FCF2D9] text-[#8B681C]"><MessageCircle size={28} /></span>
+                <div className="flex-1">
+                  <h3 className="text-xl font-extrabold">AgriGuide</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#647367]">
+                    Explore agricultural learning topics such as crop production, soil health, livestock care and farm business. Get practical information to support better decisions across your farming activities.
+                  </p>
+                  <a href="/agriguide" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]">
+                    Open AgriGuide <ArrowRight size={16} />
+                  </a>
+                  <p className="mt-3 text-xs leading-5 text-[#718071]">
+                    AI-powered answers require an active AI service connection. Advice should be checked against trusted local guidance.
+                  </p>
+                </div>
+              </div>
             </article>
           </div>
 
@@ -317,11 +308,10 @@ export default function Home() {
               <div className="flex-1">
                 <h3 className="font-bold">Trusted agricultural information</h3>
                 <p className="mt-1 text-sm leading-6 text-[#647367]">
-                  Use reliable sources for agricultural updates, weather information and research.
+                  Use reliable sources for agricultural updates, research and practical farming guidance.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
                   <a href="https://mofa.gov.gh/" target="_blank" rel="noopener noreferrer" className="text-[#17472D] underline-offset-4 hover:underline">Ministry of Food and Agriculture</a>
-                  <a href="https://www.meteo.gov.gh/" target="_blank" rel="noopener noreferrer" className="text-[#17472D] underline-offset-4 hover:underline">Ghana Meteorological Agency</a>
                   <a href="https://www.fao.org/ghana/en" target="_blank" rel="noopener noreferrer" className="text-[#17472D] underline-offset-4 hover:underline">FAO Ghana</a>
                   <a href="https://www.csir.org.gh/" target="_blank" rel="noopener noreferrer" className="text-[#17472D] underline-offset-4 hover:underline">CSIR Ghana</a>
                 </div>
@@ -429,7 +419,6 @@ export default function Home() {
             </div>
             <div className="space-y-3">
               <p className="font-bold text-white">Farm knowledge</p>
-              <a href="/weather" className="block hover:text-white">Farm weather</a>
               <a href="/agriguide" className="block hover:text-white">AgriGuide</a>
               <a href="https://www.fao.org/ghana/en" target="_blank" rel="noopener noreferrer" className="block hover:text-white">FAO Ghana</a>
             </div>

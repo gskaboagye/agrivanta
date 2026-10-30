@@ -6,6 +6,8 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  BookOpen,
+  CloudSun,
   MessageSquare,
   MessageCircle,
   CheckCircle2,
@@ -109,11 +111,28 @@ const roleDetails: Record<
 const navigation = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Marketplace", href: "/products", icon: ShoppingBag },
-  { label: "Add Listing", href: "/dashboard/create-listing", icon: Plus, listingOnly: true },
+  {
+    label: "Add Listing",
+    href: "/dashboard/create-listing",
+    icon: Plus,
+    listingOnly: true,
+  },
   { label: "My Listings", href: "/dashboard/my-listings", icon: Package },
-  { label: "Messages", href: "/dashboard/messages", icon: MessageCircle },
   { label: "Inquiries", href: "/dashboard/inquiries", icon: MessageSquare },
-  { label: "My activity", href: "/dashboard#activity", icon: Activity },
+  { label: "Messages", href: "/dashboard/messages", icon: MessageCircle },
+  {
+    label: "AgriGuide",
+    href: "/agriguide",
+    icon: BookOpen,
+    allowedRoles: ["farmer", "supplier"],
+  },
+  {
+    label: "Weather",
+    href: "/weather",
+    icon: CloudSun,
+    allowedRoles: ["farmer", "supplier"],
+  },
+  { label: "My Activity", href: "/dashboard#activity", icon: Activity },
 ];
 
 const roleActions: Record<
@@ -274,7 +293,15 @@ function Sidebar({
 
           <nav className="space-y-1">
             {navigation
-              .filter((item) => !("listingOnly" in item) || user.role !== "buyer")
+              .filter((item) => {
+                const canCreateListing =
+                  !("listingOnly" in item) || user.role !== "buyer";
+                const canAccessRoleFeature =
+                  !("allowedRoles" in item) ||
+                  (item.allowedRoles as readonly AccountRole[]).includes(user.role);
+
+                return canCreateListing && canAccessRoleFeature;
+              })
               .map((item) => {
               const active =
                 (item.href === "/dashboard" && pathname === "/dashboard") ||
@@ -283,8 +310,13 @@ function Sidebar({
                   pathname === item.href);
 
               return (
-                <Link
-                  key={item.label}
+                <div key={item.label}>
+                  {item.label === "AgriGuide" && (
+                    <p className="mb-3 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa294]">
+                      Farming tools
+                    </p>
+                  )}
+                  <Link
                   href={item.href}
                   onClick={onClose}
                   className={`flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-semibold transition ${
@@ -299,7 +331,8 @@ function Sidebar({
                   {active && (
                     <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#D9A441]" />
                   )}
-                </Link>
+                  </Link>
+                </div>
               );
             })}
           </nav>
