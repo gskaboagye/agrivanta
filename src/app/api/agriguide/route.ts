@@ -1,4 +1,5 @@
 
+import { getCurrentUser } from "@/lib/auth";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -7,12 +8,13 @@ const MAX_HISTORY_MESSAGES = 8;
 
 const languageNames: Record<string, string> = {
   en: "English",
+  fr: "French",
   tw: "Twi (Akan)",
   ee: "Ewe",
   gaa: "Ga",
+  fat: "Fante",
   dag: "Dagbani",
   ada: "Dangme (Adangme)",
-  fat: "Fante",
   nzi: "Nzema",
   dagaa: "Dagaare",
   hau: "Hausa",
@@ -50,10 +52,31 @@ Rules:
   damage, recommend contacting a qualified extension officer or veterinarian.
 - Educational guidance does not replace advice from a qualified agricultural
   extension officer.
+- When French is selected, use clear, natural French suitable for farmers
+  and agricultural learners in West Africa.
+- When Twi is selected, use natural Akan/Twi phrasing.
 `;
 
 export async function POST(request: Request) {
   try {
+    // Authentication and role authorization
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Please log in to use AgriGuide." },
+        { status: 401 }
+      );
+    }
+
+    if (user.role !== "farmer" && user.role !== "supplier") {
+      return NextResponse.json(
+        { error: "You do not have permission to use AgriGuide." },
+        { status: 403 }
+      );
+    }
+
+    // Check OpenAI configuration
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         {
@@ -135,6 +158,9 @@ export async function POST(request: Request) {
         `Respond in ${languageNames[language]}.`,
         language === "tw"
           ? "For Twi, use natural Akan/Twi phrasing."
+          : "",
+        language === "fr"
+          ? "For French, use natural, grammatically correct French and explain agricultural terms clearly."
           : "",
         "Do not switch to English unless the user requests it or you explain that you cannot confidently answer in the selected language.",
       ]
