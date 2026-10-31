@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import AgriGuideClient from "./agriguide-client";
 
-export const dynamic = "force-dynamic";
+export const instant = false;
 
 export default async function AgriGuidePage() {
   const user = await getCurrentUser();

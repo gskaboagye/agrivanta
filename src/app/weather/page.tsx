@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import WeatherClient from "./weather-client";
 
-export const dynamic = "force-dynamic";
+export const instant = false;
 
 export default async function WeatherPage() {
   const user = await getCurrentUser();
