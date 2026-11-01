@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, Leaf } from "lucide-react";
+import { emailSchema, optionalPhoneSchema } from "@/lib/validation";
 
 const roles = [
   { value: "farmer", label: "Farmer" },
@@ -19,6 +20,8 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [role, setRole] = useState("farmer");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -29,6 +32,23 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    const emailResult = emailSchema.safeParse(email);
+    const phoneResult = optionalPhoneSchema.safeParse(phone);
+
+    setEmailError(
+      emailResult.success ? "" : "Enter a valid email address."
+    );
+
+    setPhoneError(
+      phoneResult.success
+        ? ""
+        : phoneResult.error.issues[0]?.message ?? "Enter a valid phone number."
+    );
+
+    if (!emailResult.success || !phoneResult.success) {
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Your passwords do not match.");
@@ -43,8 +63,8 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          email,
-          phone,
+          email: emailResult.data,
+          phone: phoneResult.data,
           role,
           password,
         }),
@@ -125,9 +145,22 @@ export default function RegisterPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                onBlur={() => {
+                  const result = emailSchema.safeParse(email);
+                  setEmailError(
+                    result.success ? "" : "Enter a valid email address."
+                  );
+                }}
+                aria-invalid={Boolean(emailError)}
+                aria-describedby={emailError ? "email-error" : undefined}
                 className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
                 placeholder="you@example.com"
               />
+              {emailError && (
+                <span id="email-error" className="mt-1 block text-xs font-normal text-red-600">
+                  {emailError}
+                </span>
+              )}
             </label>
 
             <label className="block text-sm font-semibold">
@@ -138,9 +171,24 @@ export default function RegisterPage() {
                 autoComplete="tel"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
+                onBlur={() => {
+                  const result = optionalPhoneSchema.safeParse(phone);
+                  setPhoneError(
+                    result.success
+                      ? ""
+                      : result.error.issues[0]?.message ?? "Enter a valid phone number."
+                  );
+                }}
+                aria-invalid={Boolean(phoneError)}
+                aria-describedby={phoneError ? "phone-error" : undefined}
                 className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
-                placeholder="Your contact number"
+                placeholder="e.g. 024 123 4567 or +233 24 123 4567"
               />
+              {phoneError && (
+                <span id="phone-error" className="mt-1 block text-xs font-normal text-red-600">
+                  {phoneError}
+                </span>
+              )}
             </label>
 
             <label className="block text-sm font-semibold">

@@ -1,4 +1,4 @@
-
+﻿
 import { NextResponse } from "next/server";
 import { MongoServerError } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
@@ -9,8 +9,11 @@ import {
   type AccountRole,
   type AuthUser,
 } from "@/lib/auth";
+import {
+  emailSchema,
+  optionalPhoneSchema,
+} from "@/lib/validation";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
   try {
@@ -42,12 +45,12 @@ export async function POST(request: Request) {
     const name =
       typeof data.name === "string" ? data.name.trim() : "";
 
-    const email =
+    let email =
       typeof data.email === "string"
         ? data.email.trim().toLowerCase()
         : "";
 
-    const phone =
+    let phone =
       typeof data.phone === "string" ? data.phone.trim() : "";
 
     const password =
@@ -61,17 +64,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Name must be 2–80 characters.",
+          message: "Name must be 2â€“80 characters.",
         },
         { status: 400 }
       );
     }
 
-    // Validate email.
-    if (
-      email.length > 254 ||
-      !EMAIL_PATTERN.test(email)
-    ) {
+    // Validate and normalize email.
+    const emailResult = emailSchema.safeParse(email);
+
+    if (!emailResult.success) {
       return NextResponse.json(
         {
           success: false,
@@ -81,21 +83,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate phone number.
-    if (
-      phone.length > 30 ||
-      (phone && !/^[+\d\s().-]+$/.test(phone))
-    ) {
+    email = emailResult.data;
+
+    // Validate and normalize the optional phone number.
+    const phoneResult = optionalPhoneSchema.safeParse(phone);
+
+    if (!phoneResult.success) {
       return NextResponse.json(
         {
           success: false,
-          message: "Enter a valid phone number.",
+          message: phoneResult.error.issues[0]?.message ??
+            "Enter a valid phone number.",
         },
         { status: 400 }
       );
     }
 
-    // Validate password using its UTF-8 byte length.
+    phone = phoneResult.data;
+// Validate password using its UTF-8 byte length.
     const passwordBytes = new TextEncoder().encode(password).length;
 
     if (password.length < 10 || passwordBytes > 72) {
@@ -200,3 +205,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

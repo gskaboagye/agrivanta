@@ -1,4 +1,4 @@
-
+﻿
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
@@ -10,7 +10,8 @@ import {
   type AuthUser,
 } from "@/lib/auth";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { emailSchema } from "@/lib/validation";
+
 
 export async function POST(request: Request) {
   try {
@@ -39,10 +40,11 @@ export async function POST(request: Request) {
 
     const data = body as Record<string, unknown>;
 
-    const email =
-      typeof data.email === "string"
-        ? data.email.trim().toLowerCase()
-        : "";
+    const rawEmail =
+      typeof data.email === "string" ? data.email : "";
+
+    const emailResult = emailSchema.safeParse(rawEmail);
+    const email = emailResult.success ? emailResult.data : "";
 
     const password =
       typeof data.password === "string"
@@ -51,9 +53,7 @@ export async function POST(request: Request) {
 
     // Validate email and password.
     if (
-      !email ||
-      email.length > 254 ||
-      !EMAIL_PATTERN.test(email) ||
+      !emailResult.success ||
       !password ||
       new TextEncoder().encode(password).length > 72
     ) {

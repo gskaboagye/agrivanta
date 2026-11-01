@@ -1,8 +1,9 @@
-
+﻿
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getDatabase } from "@/lib/mongodb";
+import { optionalPhoneSchema } from "@/lib/validation";
 
 export async function GET() {
   try {
@@ -79,23 +80,30 @@ export async function PATCH(request: Request) {
 
     const data = body as Record<string, unknown>;
     const name = typeof data.name === "string" ? data.name.trim() : "";
-    const phone = typeof data.phone === "string" ? data.phone.trim() : "";
+    let phone = typeof data.phone === "string" ? data.phone.trim() : "";
     const phonePublic = data.phonePublic;
     const whatsappEnabled = data.whatsappEnabled;
 
     if (name.length < 2 || name.length > 80) {
       return NextResponse.json(
-        { message: "Name must be 2–80 characters." },
+        { message: "Name must be 2â€“80 characters." },
         { status: 400 }
       );
     }
 
-    if (phone.length > 30 || (phone && !/^[+\d\s().-]+$/.test(phone))) {
+    const phoneResult = optionalPhoneSchema.safeParse(phone);
+
+    if (!phoneResult.success) {
       return NextResponse.json(
-        { message: "Enter a valid phone number." },
+        {
+          message: phoneResult.error.issues[0]?.message ??
+            "Enter a valid phone number.",
+        },
         { status: 400 }
       );
     }
+
+    phone = phoneResult.data;
 
     if (typeof phonePublic !== "boolean" ||
         typeof whatsappEnabled !== "boolean") {

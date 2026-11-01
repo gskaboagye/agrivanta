@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
@@ -13,6 +13,7 @@ import {
   Save,
   UserRound,
 } from "lucide-react";
+import { optionalPhoneSchema } from "@/lib/validation";
 
 type Profile = {
   name: string;
@@ -38,6 +39,7 @@ export default function ProfileSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -97,9 +99,22 @@ export default function ProfileSettingsPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setSuccess("");
+
+    const phoneResult = optionalPhoneSchema.safeParse(profile.phone);
+
+    setPhoneError(
+      phoneResult.success
+        ? ""
+        : phoneResult.error.issues[0]?.message ?? "Enter a valid phone number."
+    );
+
+    if (!phoneResult.success) {
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const response = await fetch("/api/profile", {
@@ -108,7 +123,7 @@ export default function ProfileSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: profile.name,
-          phone: profile.phone,
+          phone: phoneResult.data,
           phonePublic: profile.phonePublic,
           whatsappEnabled: profile.whatsappEnabled,
         }),
@@ -253,12 +268,28 @@ export default function ProfileSettingsPage() {
                       ? current.whatsappEnabled
                       : false,
                   }));
+                  setPhoneError("");
                   setSuccess("");
                   setError("");
                 }}
+                onBlur={() => {
+                  const result = optionalPhoneSchema.safeParse(profile.phone);
+                  setPhoneError(
+                    result.success
+                      ? ""
+                      : result.error.issues[0]?.message ?? "Enter a valid phone number."
+                  );
+                }}
+                aria-invalid={Boolean(phoneError)}
+                aria-describedby={phoneError ? "phone-error" : undefined}
                 placeholder="+233 24 123 4567"
                 className="w-full rounded-xl border border-[#dfe5da] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
               />
+              {phoneError && (
+                <span id="phone-error" className="mt-1 block text-xs text-red-600">
+                  {phoneError}
+                </span>
+              )}
             </label>
 
             <div className="mt-5 space-y-4">
@@ -346,3 +377,4 @@ export default function ProfileSettingsPage() {
     </main>
   );
 }
+

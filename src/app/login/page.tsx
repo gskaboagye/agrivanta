@@ -1,14 +1,16 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Leaf } from "lucide-react";
+import { emailSchema } from "@/lib/validation";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -16,13 +18,24 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    const emailResult = emailSchema.safeParse(email);
+
+    setEmailError(
+      emailResult.success ? "" : "Enter a valid email address."
+    );
+
+    if (!emailResult.success) {
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: emailResult.data, password }),
       });
 
       const result = await response.json();
@@ -68,9 +81,22 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              onBlur={() => {
+                const result = emailSchema.safeParse(email);
+                setEmailError(
+                  result.success ? "" : "Enter a valid email address."
+                );
+              }}
+              aria-invalid={Boolean(emailError)}
+              aria-describedby={emailError ? "email-error" : undefined}
               className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
               placeholder="you@example.com"
             />
+            {emailError && (
+              <span id="email-error" className="mt-1 block text-xs font-normal text-red-600">
+                {emailError}
+              </span>
+            )}
           </label>
 
           <label className="block text-sm font-semibold">
