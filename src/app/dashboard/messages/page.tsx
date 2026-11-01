@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -115,7 +115,7 @@ export default function MessagesPage() {
             </h1>
 
             <p className="mt-2 max-w-xl text-sm leading-6 text-[#68776A]">
-              Communicate with buyers and sellers about your agricultural listings.
+              Message other AgriVanta users directly or discuss agricultural listings.
               Your conversations are private to their participants.
             </p>
           </div>
@@ -145,7 +145,7 @@ export default function MessagesPage() {
                 Your conversations
               </p>
               <p className="text-lg font-bold">
-                {loading ? "—" : inquiries.length}
+                {loading ? "â€”" : inquiries.length}
               </p>
             </div>
           </div>
@@ -195,7 +195,7 @@ export default function MessagesPage() {
             </h2>
 
             <p className="mt-2 text-sm text-[#68776A]">
-              Contact a seller through the marketplace to start a conversation.
+              Visit a user profile or explore the marketplace to start a conversation.
             </p>
 
             <Link
@@ -237,9 +237,7 @@ export default function MessagesPage() {
                   </div>
 
                   <p className="mt-1 text-xs text-[#68776A]">
-                    Buyer: {inquiry.buyerName || "Marketplace user"}
-                    {" · "}
-                    Seller: {inquiry.sellerName || "Marketplace user"}
+                    Participants: {inquiry.buyerName || "AgriVanta user"} and {inquiry.sellerName || "AgriVanta user"}
                   </p>
 
                   <p className="mt-2 line-clamp-2 break-words text-sm text-[#68776A]">
@@ -266,3 +264,4 @@ export default function MessagesPage() {
     </main>
   );
 }
+

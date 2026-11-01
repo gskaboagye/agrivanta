@@ -1,4 +1,4 @@
-
+﻿
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
@@ -86,6 +86,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
+      currentUserId: userId,
       inquiry: {
         id,
         listingId: String(inquiry.listingId ?? ""),
@@ -200,6 +201,13 @@ export async function POST(
       );
     }
 
+    if (senderId === recipientId) {
+      return NextResponse.json(
+        { error: "You cannot send a message to yourself." },
+        { status: 400 }
+      );
+    }
+
     const senderName = String(user.name ?? "AgriVanta user");
     const now = new Date();
 
@@ -274,3 +282,4 @@ export async function POST(
     );
   }
 }
+

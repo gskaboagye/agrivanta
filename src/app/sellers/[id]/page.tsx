@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import {
@@ -7,7 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   MapPin,
@@ -75,7 +75,7 @@ function formatPrice(price: Listing["price"], unit: string) {
   const numericPrice = Number(price);
 
   const formatted = Number.isFinite(numericPrice)
-    ? `GH₵ ${numericPrice.toLocaleString("en-GH", {
+    ? `GHâ‚µ ${numericPrice.toLocaleString("en-GH", {
         maximumFractionDigits: 2,
       })}`
     : String(price);
@@ -109,6 +109,7 @@ function formatMemberDate(value: string | null) {
 function SellerProfileContent() {
   const params = useParams<{ id: string }>();
   const sellerId = params.id;
+  const router = useRouter();
 
   const [profile, setProfile] =
     useState<ProfileResponse | null>(null);
@@ -121,6 +122,13 @@ function SellerProfileContent() {
   const [notice, setNotice] = useState("");
   const [noticeType, setNoticeType] =
     useState<"success" | "error">("success");
+
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [authChecked, setAuthChecked] = useState(false);
+  const [directMessageOpen, setDirectMessageOpen] = useState(false);
+  const [directMessage, setDirectMessage] = useState("");
+  const [sendingDirectMessage, setSendingDirectMessage] = useState(false);
+  const [directMessageError, setDirectMessageError] = useState("");
 
   const loadProfile = useCallback(async () => {
     if (!sellerId) {
@@ -170,7 +178,97 @@ function SellerProfileContent() {
     void loadProfile();
   }, [loadProfile]);
 
-  async function sendInquiry(
+  useEffect(() => {
+    let active = true;
+
+    async function loadCurrentUser() {
+      try {
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await response.json();
+
+        if (active && response.ok && typeof data.user?.id === "string") {
+          setCurrentUserId(data.user.id);
+        }
+      } catch (error) {
+        console.error("Unable to check current user:", error);
+      } finally {
+        if (active) setAuthChecked(true);
+      }
+    }
+
+    void loadCurrentUser();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  
+  async function sendDirectMessage(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!currentUserId) {
+      setDirectMessageError("Please log in to send a message.");
+      return;
+    }
+
+    if (currentUserId === seller.id) {
+      setDirectMessageError("You cannot message your own account.");
+      return;
+    }
+
+    if (!directMessage.trim()) {
+      setDirectMessageError("Please enter a message.");
+      return;
+    }
+
+    setSendingDirectMessage(true);
+    setDirectMessageError("");
+
+    try {
+      const response = await fetch("/api/inquiries/direct", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipientId: seller.id,
+          message: directMessage.trim(),
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to send your message.");
+      }
+
+      if (!data.conversationId) {
+        throw new Error(
+          "The conversation was created, but its ID was not returned."
+        );
+      }
+
+      router.push(
+        `/dashboard/messages/${encodeURIComponent(data.conversationId)}`
+      );
+    } catch (error) {
+      setDirectMessageError(
+        error instanceof Error
+          ? error.message
+          : "Unable to send your message. Please try again."
+      );
+    } finally {
+      setSendingDirectMessage(false);
+    }
+  }
+async function sendInquiry(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
@@ -402,7 +500,7 @@ function SellerProfileContent() {
                   {locations.length > 0 && (
                     <span className="flex items-center gap-2">
                       <MapPin size={16} />
-                      {locations.slice(0, 2).join(" · ")}
+                      {locations.slice(0, 2).join(" Â· ")}
                     </span>
                   )}
 
@@ -438,6 +536,21 @@ function SellerProfileContent() {
                   </a>
                 )}
               </div>
+            )}
+
+            {authChecked && currentUserId && currentUserId !== seller.id && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDirectMessage("");
+                  setDirectMessageError("");
+                  setDirectMessageOpen(true);
+                }}
+                className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-[#17472D] px-5 py-3 font-semibold text-white transition hover:bg-[#103720]"
+              >
+                <MessageCircle size={18} />
+                Message
+              </button>
             )}
           </div>
         </section>
@@ -552,6 +665,123 @@ function SellerProfileContent() {
         </section>
       </div>
 
+      {/* Direct message modal */}
+      {directMessageOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !sendingDirectMessage
+            ) {
+              setDirectMessageOpen(false);
+              setDirectMessageError("");
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="direct-message-title"
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="direct-message-title"
+                  className="text-2xl font-bold text-[#17472D]"
+                >
+                  Message {seller.name || "AgriVanta user"}
+                </h2>
+                <p className="mt-2 text-sm text-[#647367]">
+                  Start a private conversation with this AgriVanta member.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDirectMessageOpen(false);
+                  setDirectMessageError("");
+                }}
+                disabled={sendingDirectMessage}
+                aria-label="Close direct message form"
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={sendDirectMessage}
+              className="mt-5 space-y-4"
+            >
+              <label
+                htmlFor="direct-message-content"
+                className="block text-sm font-semibold text-[#17472D]"
+              >
+                Your message
+              </label>
+
+              <textarea
+                id="direct-message-content"
+                value={directMessage}
+                onChange={(event) => setDirectMessage(event.target.value)}
+                maxLength={3000}
+                required
+                rows={5}
+                placeholder="Write your message..."
+                className="w-full rounded-xl border border-[#C9D4C4] px-4 py-3 outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/15"
+              />
+
+              <p className="text-right text-xs text-[#647367]">
+                {directMessage.length}/3000 characters
+              </p>
+
+              {directMessageError && (
+                <p
+                  role="alert"
+                  className="text-sm text-red-700"
+                >
+                  {directMessageError}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={sendingDirectMessage}
+                  onClick={() => {
+                    setDirectMessageOpen(false);
+                    setDirectMessageError("");
+                  }}
+                  className="rounded-lg border border-[#C9D4C4] px-4 py-2.5 font-semibold text-[#17472D] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={sendingDirectMessage || !directMessage.trim()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-5 py-2.5 font-semibold text-white hover:bg-[#103720] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingDirectMessage ? (
+                    <>
+                      <LoaderCircle size={18} className="animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle size={18} />
+                      Send message
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {/* Inquiry modal */}
       {selectedListing && (
         <div
@@ -692,3 +922,10 @@ export default function SellerProfilePage() {
     </Suspense>
   );
 }
+
+
+
+
+
+
+
