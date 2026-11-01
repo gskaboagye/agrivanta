@@ -7,15 +7,30 @@ import {
   createSession,
   hashPassword,
   type AccountRole,
+  type AuthUser,
 } from "@/lib/auth";
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
   try {
-    const body: unknown = await request.json();
+    // Parse request safely.
+    let body: unknown;
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Invalid request data." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
       return NextResponse.json(
         { success: false, message: "Invalid request data." },
         { status: 400 }
@@ -24,56 +39,82 @@ export async function POST(request: Request) {
 
     const data = body as Record<string, unknown>;
 
-    const name = typeof data.name === "string" ? data.name.trim() : "";
+    const name =
+      typeof data.name === "string" ? data.name.trim() : "";
+
     const email =
       typeof data.email === "string"
         ? data.email.trim().toLowerCase()
         : "";
-    const phone = typeof data.phone === "string" ? data.phone.trim() : "";
-    const password = typeof data.password === "string" ? data.password : "";
-    const role = typeof data.role === "string" ? data.role : "";
 
+    const phone =
+      typeof data.phone === "string" ? data.phone.trim() : "";
+
+    const password =
+      typeof data.password === "string" ? data.password : "";
+
+    const role =
+      typeof data.role === "string" ? data.role : "";
+
+    // Validate name.
     if (name.length < 2 || name.length > 80) {
-      return NextResponse.json(
-        { success: false, message: "Name must be 2–80 characters." },
-        { status: 400 }
-      );
-    }
-
-    if (email.length > 254 || !emailPattern.test(email)) {
-      return NextResponse.json(
-        { success: false, message: "Enter a valid email address." },
-        { status: 400 }
-      );
-    }
-
-    if (phone.length > 30) {
-      return NextResponse.json(
-        { success: false, message: "Phone number is too long." },
-        { status: 400 }
-      );
-    }
-
-    if (phone && !/^[+\d\s().-]+$/.test(phone)) {
-      return NextResponse.json(
-        { success: false, message: "Enter a valid phone number." },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 10 || password.length > 72) {
       return NextResponse.json(
         {
           success: false,
-          message: "Password must contain 10–72 characters.",
+          message: "Name must be 2–80 characters.",
         },
         { status: 400 }
       );
     }
 
+    // Validate email.
+    if (
+      email.length > 254 ||
+      !EMAIL_PATTERN.test(email)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Enter a valid email address.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate phone number.
+    if (
+      phone.length > 30 ||
+      (phone && !/^[+\d\s().-]+$/.test(phone))
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Enter a valid phone number.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate password using its UTF-8 byte length.
+    const passwordBytes = new TextEncoder().encode(password).length;
+
+    if (password.length < 10 || passwordBytes > 72) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Password must contain at least 10 characters and not exceed 72 UTF-8 bytes.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate account role.
     if (!ACCOUNT_ROLES.includes(role as AccountRole)) {
       return NextResponse.json(
-        { success: false, message: "Select a valid account type." },
+        {
+          success: false,
+          message: "Select a valid account type.",
+        },
         { status: 400 }
       );
     }
@@ -81,6 +122,7 @@ export async function POST(request: Request) {
     const db = await getDatabase();
     const users = db.collection("users");
 
+    // Check for an existing account.
     const existingUser = await users.findOne(
       { email },
       { projection: { _id: 1 } }
@@ -96,9 +138,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Hash password before storing it.
     const passwordHash = await hashPassword(password);
     const now = new Date();
 
+    // Only explicitly approved fields are stored.
     const result = await users.insertOne({
       name,
       email,
@@ -111,7 +155,7 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
-    const user = {
+    const user: AuthUser = {
       id: result.insertedId.toString(),
       name,
       email,
@@ -119,6 +163,7 @@ export async function POST(request: Request) {
       role: role as AccountRole,
     };
 
+    // Automatically log in the newly registered user.
     await createSession(user);
 
     return NextResponse.json(
@@ -130,7 +175,11 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof MongoServerError && error.code === 11000) {
+    // Handle duplicate email errors from MongoDB.
+    if (
+      error instanceof MongoServerError &&
+      error.code === 11000
+    ) {
       return NextResponse.json(
         {
           success: false,

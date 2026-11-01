@@ -1,14 +1,36 @@
+
 import { NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
-import { createSession, verifyPassword } from "@/lib/auth";
+import {
+  ACCOUNT_ROLES,
+  createSession,
+  verifyPassword,
+  type AccountRole,
+  type AuthUser,
+} from "@/lib/auth";
 
-
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
   try {
-    const body: unknown = await request.json();
+    // Parse and validate request body.
+    let body: unknown;
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Invalid request data." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
       return NextResponse.json(
         { success: false, message: "Invalid request data." },
         { status: 400 }
@@ -21,49 +43,110 @@ export async function POST(request: Request) {
       typeof data.email === "string"
         ? data.email.trim().toLowerCase()
         : "";
-    const password =
-      typeof data.password === "string" ? data.password : "";
 
+    const password =
+      typeof data.password === "string"
+        ? data.password
+        : "";
+
+    // Validate email and password.
     if (
       !email ||
       email.length > 254 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !EMAIL_PATTERN.test(email) ||
       !password ||
-      password.length > 72
+      new TextEncoder().encode(password).length > 72
     ) {
       return NextResponse.json(
-        { success: false, message: "Enter a valid email and password." },
+        {
+          success: false,
+          message: "Enter a valid email and password.",
+        },
         { status: 400 }
       );
     }
 
     const db = await getDatabase();
-    const user = await db.collection("users").findOne({ email });
 
+    const user = await db.collection("users").findOne({
+      email,
+    });
+
+    // Use the same generic response for invalid credentials.
     if (
       !user ||
       typeof user.passwordHash !== "string" ||
-      !(await verifyPassword(password, user.passwordHash))
+      !user.passwordHash
     ) {
       return NextResponse.json(
-        { success: false, message: "Invalid email or password." },
+        {
+          success: false,
+          message: "Invalid email or password.",
+        },
         { status: 401 }
       );
     }
 
-    const publicUser = {
+    let passwordMatches = false;
+
+    try {
+      passwordMatches = await verifyPassword(
+        password,
+        user.passwordHash
+      );
+    } catch {
+      // Treat malformed password hashes as invalid credentials.
+      passwordMatches = false;
+    }
+
+    if (!passwordMatches) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid email or password.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // Validate the database account ID.
+    if (!(user._id instanceof ObjectId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unable to authenticate this account.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // Ensure the account has a supported AgriVanta role.
+    if (
+      typeof user.role !== "string" ||
+      !ACCOUNT_ROLES.includes(user.role as AccountRole)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "This account has an invalid account type.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // Build the authenticated user from database information.
+    const publicUser: AuthUser = {
       id: user._id.toString(),
       name: String(user.name ?? ""),
       email: String(user.email ?? ""),
       phone: String(user.phone ?? ""),
-      role: user.role,
+      role: user.role as AccountRole,
     };
 
-    await createSession({
-      ...publicUser,
-      role: publicUser.role,
-    });
+    // Create the secure session.
+    await createSession(publicUser);
 
+    // Preserve the existing frontend response structure.
     return NextResponse.json({
       success: true,
       message: "Login successful.",
@@ -73,7 +156,10 @@ export async function POST(request: Request) {
     console.error("Login error:", error);
 
     return NextResponse.json(
-      { success: false, message: "Login failed. Please try again." },
+      {
+        success: false,
+        message: "Login failed. Please try again.",
+      },
       { status: 500 }
     );
   }

@@ -12,6 +12,15 @@ function validId(value: string) {
   return /^[a-fA-F0-9]{24}$/.test(value) && ObjectId.isValid(value);
 }
 
+function isParticipant(
+  userId: string,
+  inquiry: Record<string, unknown>
+): boolean {
+  return (
+    userId === String(inquiry.buyerId ?? "") ||
+    userId === String(inquiry.sellerId ?? "")
+  );
+}
 export async function GET(
   _request: NextRequest,
   context: RouteContext
@@ -40,7 +49,7 @@ export async function GET(
       _id: new ObjectId(id),
     });
 
-    if (!inquiry) {
+    if (!inquiry || !isParticipant(String(user.id), inquiry)) {
       return NextResponse.json(
         { error: "Conversation not found." },
         { status: 404 }
@@ -50,13 +59,6 @@ export async function GET(
     const userId = String(user.id);
     const buyerId = String(inquiry.buyerId ?? "");
     const sellerId = String(inquiry.sellerId ?? "");
-
-    if (userId !== buyerId && userId !== sellerId) {
-      return NextResponse.json(
-        { error: "You do not have access to this conversation." },
-        { status: 403 }
-      );
-    }
 
     const storedMessages = await db
       .collection("messages")
@@ -92,6 +94,8 @@ export async function GET(
         sellerId,
         buyerName: String(inquiry.buyerName ?? "Buyer"),
         sellerName: String(inquiry.sellerName ?? "Seller"),
+        buyerEmail: String(inquiry.buyerEmail ?? ""),
+        sellerEmail: String(inquiry.sellerEmail ?? ""),
         status: String(inquiry.status ?? "new"),
         participantName:
           userId === buyerId
@@ -102,6 +106,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("Load conversation error:", error);
+
     return NextResponse.json(
       { error: "Unable to load this conversation." },
       { status: 500 }
@@ -161,17 +166,21 @@ export async function POST(
 
     if (!messageBody || messageBody.length > 3000) {
       return NextResponse.json(
-        { error: "Your message must be between 1 and 3000 characters." },
+        {
+          error:
+            "Your message must be between 1 and 3000 characters.",
+        },
         { status: 400 }
       );
     }
 
     const db = await getDatabase();
+
     const inquiry = await db.collection("inquiries").findOne({
       _id: new ObjectId(id),
     });
 
-    if (!inquiry) {
+    if (!inquiry || !isParticipant(String(user.id), inquiry)) {
       return NextResponse.json(
         { error: "Conversation not found." },
         { status: 404 }
@@ -182,14 +191,15 @@ export async function POST(
     const buyerId = String(inquiry.buyerId ?? "");
     const sellerId = String(inquiry.sellerId ?? "");
 
-    if (senderId !== buyerId && senderId !== sellerId) {
+    const recipientId = senderId === buyerId ? sellerId : buyerId;
+
+    if (!recipientId) {
       return NextResponse.json(
-        { error: "You cannot send messages in this conversation." },
-        { status: 403 }
+        { error: "Unable to identify the message recipient." },
+        { status: 400 }
       );
     }
 
-    const recipientId = senderId === buyerId ? sellerId : buyerId;
     const senderName = String(user.name ?? "AgriVanta user");
     const now = new Date();
 
@@ -203,8 +213,13 @@ export async function POST(
       read: false,
     });
 
+    // Update the inquiry only if its participants still match.
     await db.collection("inquiries").updateOne(
-      { _id: new ObjectId(id) },
+      {
+        _id: new ObjectId(id),
+        buyerId: inquiry.buyerId,
+        sellerId: inquiry.sellerId,
+      },
       {
         $set: {
           updatedAt: now,
@@ -252,6 +267,7 @@ export async function POST(
     );
   } catch (error) {
     console.error("Send message error:", error);
+
     return NextResponse.json(
       { error: "Unable to send your message right now." },
       { status: 500 }

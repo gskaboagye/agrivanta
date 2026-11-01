@@ -1,3 +1,4 @@
+
 import "server-only";
 
 import bcrypt from "bcryptjs";
@@ -39,6 +40,10 @@ function getSecret() {
   return new TextEncoder().encode(secret);
 }
 
+function isValidUserId(id: string): boolean {
+  return /^[a-fA-F0-9]{24}$/.test(id);
+}
+
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
 }
@@ -51,10 +56,15 @@ export async function verifyPassword(
 }
 
 export async function createSession(user: AuthUser) {
+  if (
+    !isValidUserId(user.id) ||
+    !ACCOUNT_ROLES.includes(user.role)
+  ) {
+    throw new Error("Invalid user information for session creation.");
+  }
+
   const token = await new SignJWT({
     role: user.role,
-    name: user.name,
-    email: user.email,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -100,6 +110,7 @@ export async function getSessionClaims() {
 
     if (
       typeof payload.sub !== "string" ||
+      !isValidUserId(payload.sub) ||
       typeof payload.role !== "string" ||
       !ACCOUNT_ROLES.includes(payload.role as AccountRole)
     ) {
@@ -118,33 +129,47 @@ export async function getSessionClaims() {
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const claims = await getSessionClaims();
 
-  if (!claims || !ObjectId.isValid(claims.userId)) {
+  if (!claims) {
     return null;
   }
 
-  const db = await getDatabase();
+  try {
+    const db = await getDatabase();
 
-  const user = await db.collection("users").findOne(
-    { _id: new ObjectId(claims.userId) },
-    {
-      projection: {
-        name: 1,
-        email: 1,
-        phone: 1,
-        role: 1,
-      },
+    const user = await db.collection("users").findOne(
+      { _id: new ObjectId(claims.userId) },
+      {
+        projection: {
+          name: 1,
+          email: 1,
+          phone: 1,
+          role: 1,
+        },
+      }
+    );
+
+    if (
+      !user ||
+      typeof user.role !== "string" ||
+      !ACCOUNT_ROLES.includes(user.role as AccountRole)
+    ) {
+      return null;
     }
-  );
 
-  if (!user || !ACCOUNT_ROLES.includes(user.role as AccountRole)) {
+    // Reject sessions whose role no longer matches the database.
+    if (user.role !== claims.role) {
+      return null;
+    }
+
+    return {
+      id: user._id.toString(),
+      name: String(user.name ?? ""),
+      email: String(user.email ?? ""),
+      phone: String(user.phone ?? ""),
+      role: user.role as AccountRole,
+    };
+  } catch (error) {
+    console.error("Current user lookup failed:", error);
     return null;
   }
-
-  return {
-    id: user._id.toString(),
-    name: String(user.name ?? ""),
-    email: String(user.email ?? ""),
-    phone: String(user.phone ?? ""),
-    role: user.role as AccountRole,
-  };
 }

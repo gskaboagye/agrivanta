@@ -1,4 +1,5 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿
+import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getDatabase } from "@/lib/mongodb";
@@ -30,11 +31,16 @@ type InquiryDocument = {
   buyerId?: string;
   buyerName?: string;
   buyerEmail?: string;
-  buyerPhone?: string;
   message?: string;
   status?: string;
   createdAt?: Date | null;
   updatedAt?: Date | null;
+};
+
+type ContactPreferences = {
+  phone?: string;
+  phonePublic?: boolean;
+  whatsappEnabled?: boolean;
 };
 
 function normalizeId(value: unknown): string | null {
@@ -56,13 +62,16 @@ function getListingOwnerId(
 
   for (const field of fields) {
     const id = normalizeId(listing[field]);
+
     if (id) return id;
   }
 
   return null;
 }
 
-function isValidObject(value: unknown): value is Record<string, unknown> {
+function isValidObject(
+  value: unknown
+): value is Record<string, unknown> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -71,7 +80,8 @@ function isValidObject(value: unknown): value is Record<string, unknown> {
 }
 
 function toObjectId(value: string): ObjectId | null {
-  return /^[a-fA-F0-9]{24}$/.test(value) && ObjectId.isValid(value)
+  return /^[a-fA-F0-9]{24}$/.test(value) &&
+    ObjectId.isValid(value)
     ? new ObjectId(value)
     : null;
 }
@@ -88,6 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     let body: unknown;
+
     try {
       body = await request.json();
     } catch {
@@ -105,11 +116,17 @@ export async function POST(request: NextRequest) {
     }
 
     const listingId =
-      typeof body.listingId === "string" ? body.listingId.trim() : "";
+      typeof body.listingId === "string"
+        ? body.listingId.trim()
+        : "";
+
     const message =
-      typeof body.message === "string" ? body.message.trim() : "";
+      typeof body.message === "string"
+        ? body.message.trim()
+        : "";
 
     const parsedListingId = toObjectId(listingId);
+
     if (!parsedListingId) {
       return NextResponse.json(
         { error: "A valid listing ID is required." },
@@ -119,15 +136,21 @@ export async function POST(request: NextRequest) {
 
     if (message.length < 10 || message.length > 3000) {
       return NextResponse.json(
-        { error: "Your message must be between 10 and 3000 characters." },
+        {
+          error: "Your message must be between 10 and 3000 characters.",
+        },
         { status: 400 }
       );
     }
 
     const db = await getDatabase();
+
     const listing = await db
       .collection<ListingDocument>("listings")
-      .findOne({ _id: parsedListingId, status: "active" });
+      .findOne({
+        _id: parsedListingId,
+        status: "active",
+      });
 
     if (!listing) {
       return NextResponse.json(
@@ -142,80 +165,88 @@ export async function POST(request: NextRequest) {
 
     if (!sellerId) {
       return NextResponse.json(
-        { error: "The seller for this listing could not be identified." },
+        {
+          error: "The seller for this listing could not be identified.",
+        },
         { status: 409 }
       );
     }
 
     const buyerId = String(user.id);
+
     if (sellerId === buyerId) {
       return NextResponse.json(
-        { error: "You cannot send an inquiry about your own listing." },
+        {
+          error: "You cannot send an inquiry about your own listing.",
+        },
         { status: 400 }
       );
     }
 
-    // Only retain the buyer's phone number when the buyer has opted in
-    // to public phone contact. Missing preference fields default to private.
-    const buyerObjectId = toObjectId(buyerId);
-    const buyerAccount = buyerObjectId
-      ? await db
-          .collection("users")
-          .findOne(
-            { _id: buyerObjectId },
-            { projection: { phone: 1, phonePublic: 1 } }
-          )
-      : null;
-    const buyerAllowsPhoneContact = buyerAccount?.phonePublic === true;
-    const buyerPhone = buyerAllowsPhoneContact
-      ? String(buyerAccount?.phone ?? user.phone ?? "").trim()
-      : "";
-
     const now = new Date();
+
     const inquiry = {
       listingId,
       listingTitle: String(listing.title ?? "Untitled listing"),
-      listingType: String(listing.type ?? listing.listingType ?? "product"),
+      listingType: String(
+        listing.type ?? listing.listingType ?? "product"
+      ),
+
       sellerId,
-      sellerName: String(listing.seller ?? listing.sellerName ?? "Seller"),
-      // Seller email is retained for the buyer-facing inquiry view, as in the
-      // existing workflow. Do not return it to the seller in GET responses.
+      sellerName: String(
+        listing.seller ?? listing.sellerName ?? "Seller"
+      ),
+
+      // Seller email remains visible to the buyer.
       sellerEmail:
         typeof listing.sellerEmail === "string"
           ? listing.sellerEmail
           : typeof listing.userEmail === "string"
             ? listing.userEmail
             : "",
+
       buyerId,
       buyerName: String(user.name ?? ""),
+
+      // Buyer email remains visible to the seller.
       buyerEmail: String(user.email ?? ""),
-      buyerPhone,
+
+      // Phone numbers are retrieved from current account settings.
+      // Do not store a potentially outdated phone number here.
       message,
       status: "new",
       createdAt: now,
       updatedAt: now,
     };
 
-    const result = await db.collection("inquiries").insertOne(inquiry);
+    const result = await db
+      .collection("inquiries")
+      .insertOne(inquiry);
 
+    // Notify only the seller who owns this listing.
     let notificationCreated = false;
+
     try {
       await db.collection("notifications").insertOne({
         userId: sellerId,
         type: "new_inquiry",
         title: "New inquiry received",
-        message: `${inquiry.buyerName || "A buyer"} sent an inquiry about "${inquiry.listingTitle}".`,
+        message: `${
+          inquiry.buyerName || "A buyer"
+        } sent an inquiry about "${inquiry.listingTitle}".`,
         listingId: inquiry.listingId,
         inquiryId: result.insertedId.toString(),
         read: false,
         createdAt: now,
         updatedAt: now,
       });
+
       notificationCreated = true;
     } catch (notificationError) {
-      // The inquiry has already been saved, so notification failure should
-      // not cause the buyer to be told that the inquiry itself failed.
-      console.error("Create inquiry notification error:", notificationError);
+      console.error(
+        "Create inquiry notification error:",
+        notificationError
+      );
     }
 
     return NextResponse.json(
@@ -235,6 +266,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Create inquiry error:", error);
+
     return NextResponse.json(
       { error: "Unable to send your inquiry right now." },
       { status: 500 }
@@ -253,7 +285,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const view = request.nextUrl.searchParams.get("view") ?? "all";
+    const view =
+      request.nextUrl.searchParams.get("view") ?? "all";
+
     if (!["all", "sent", "received"].includes(view)) {
       return NextResponse.json(
         { error: "View must be all, sent, or received." },
@@ -262,14 +296,22 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = String(user.id);
+
+    // Enforce account ownership directly in MongoDB.
     const filter =
       view === "sent"
         ? { buyerId: userId }
         : view === "received"
           ? { sellerId: userId }
-          : { $or: [{ buyerId: userId }, { sellerId: userId }] };
+          : {
+              $or: [
+                { buyerId: userId },
+                { sellerId: userId },
+              ],
+            };
 
     const db = await getDatabase();
+
     const inquiries = await db
       .collection<InquiryDocument>("inquiries")
       .find(filter)
@@ -277,77 +319,119 @@ export async function GET(request: NextRequest) {
       .limit(100)
       .toArray();
 
-    // Re-check each buyer's current phone preference when displaying received
-    // inquiries. This means turning public phone contact off also hides the
-    // number in previously created inquiries. Missing preferences are private.
-    const buyerIds = Array.from(
+    // Collect the IDs of both participants.
+    const participantIds = Array.from(
       new Set(
-        inquiries
-          .filter((item) => String(item.sellerId ?? "") === userId)
-          .map((item) => String(item.buyerId ?? ""))
-          .filter((id) => toObjectId(id) !== null)
+        inquiries.flatMap((item) => [
+          String(item.buyerId ?? ""),
+          String(item.sellerId ?? ""),
+        ]).filter(Boolean)
       )
     );
-    const buyerObjectIds = buyerIds
+
+    const participantObjectIds = participantIds
       .map((id) => toObjectId(id))
       .filter((id): id is ObjectId => id !== null);
 
-    const buyerAccounts = buyerObjectIds.length
+    // Retrieve current contact preferences for both parties.
+    const accounts = participantObjectIds.length
       ? await db
           .collection("users")
           .find(
-            { _id: { $in: buyerObjectIds } },
-            { projection: { phonePublic: 1 } }
+            { _id: { $in: participantObjectIds } },
+            {
+              projection: {
+                phone: 1,
+                phonePublic: 1,
+                whatsappEnabled: 1,
+              },
+            }
           )
           .toArray()
       : [];
-    const phonePublicByBuyerId = new Map<string, boolean>(
-      buyerAccounts.map((account) => [
+
+    const contactPreferences = new Map<
+      string,
+      ContactPreferences
+    >(
+      accounts.map((account) => [
         String(account._id),
-        account.phonePublic === true,
+        {
+          phone: String(account.phone ?? ""),
+          phonePublic: account.phonePublic === true,
+          whatsappEnabled: account.whatsappEnabled === true,
+        },
       ])
     );
 
     return NextResponse.json({
       success: true,
+
       inquiries: inquiries.map((item) => {
-        const isBuyer = String(item.buyerId ?? "") === userId;
-        const isSeller = String(item.sellerId ?? "") === userId;
+        const isBuyer =
+          String(item.buyerId ?? "") === userId;
+
+        const isSeller =
+          String(item.sellerId ?? "") === userId;
+
         const buyerId = String(item.buyerId ?? "");
-        const buyerPhoneIsPublic = phonePublicByBuyerId.get(buyerId) === true;
+        const sellerId = String(item.sellerId ?? "");
+
+        const buyerContact = contactPreferences.get(buyerId);
+        const sellerContact = contactPreferences.get(sellerId);
 
         return {
           id: item._id.toString(),
           listingId: String(item.listingId ?? ""),
           listingTitle: String(item.listingTitle ?? ""),
           listingType: String(item.listingType ?? "product"),
-          sellerId: String(item.sellerId ?? ""),
+
+          sellerId,
           sellerName: String(item.sellerName ?? "Seller"),
+
           buyerId,
           buyerName: String(item.buyerName ?? ""),
+
           message: String(item.message ?? ""),
           status: String(item.status ?? "new"),
           createdAt: item.createdAt ?? null,
           updatedAt: item.updatedAt ?? null,
-          // The seller sees buyer contact details only when the buyer has
-          // explicitly enabled public phone contact.
+
+          // Seller sees buyer email and permitted contact details.
           ...(isSeller
             ? {
                 buyerEmail: String(item.buyerEmail ?? ""),
-                ...(buyerPhoneIsPublic
-                  ? { buyerPhone: String(item.buyerPhone ?? "") }
+
+                ...(buyerContact?.phonePublic === true
+                  ? {
+                      buyerPhone: buyerContact.phone ?? "",
+                      buyerWhatsappEnabled:
+                        buyerContact.whatsappEnabled === true,
+                    }
                   : {}),
               }
             : {}),
-          // Preserve the existing buyer-facing seller email behavior.
+
+          // Buyer sees seller email and permitted contact details.
           ...(isBuyer
-            ? { sellerEmail: String(item.sellerEmail ?? "") }
+            ? {
+                sellerEmail: String(item.sellerEmail ?? ""),
+
+                ...(sellerContact?.phonePublic === true
+                  ? {
+                      sellerPhone: sellerContact.phone ?? "",
+                      sellerWhatsappEnabled:
+                        sellerContact.whatsappEnabled === true,
+                    }
+                  : {}),
+              }
             : {}),
         };
       }),
     });
   } catch (error) {
     console.error("Fetch inquiries error:", error);
+
     return NextResponse.json(
       { error: "Unable to load inquiries." },
       { status: 500 }

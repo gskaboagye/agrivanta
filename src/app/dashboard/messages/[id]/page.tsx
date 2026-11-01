@@ -38,7 +38,9 @@ function ConversationContent() {
   const params = useParams<{ id: string }>();
   const inquiryId = params.id;
 
-  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [conversation, setConversation] =
+    useState<Conversation | null>(null);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -46,60 +48,90 @@ function ConversationContent() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] =
+    useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
   const requestInProgressRef = useRef(false);
   const initialLoadRef = useRef(true);
 
-  const loadConversation = useCallback(async (silent = false) => {
-    if (!inquiryId || requestInProgressRef.current) return;
+  const loadConversation = useCallback(
+    async (silent = false) => {
+      if (!inquiryId || requestInProgressRef.current) return;
 
-    requestInProgressRef.current = true;
+      requestInProgressRef.current = true;
 
-    try {
-      const response = await fetch(
-        `/api/inquiries/${encodeURIComponent(inquiryId)}/messages`,
-        {
-          credentials: "include",
-          cache: "no-store",
-        }
-      );
-
-      if (response.status === 401) {
-        window.location.href = "/login";
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Unable to load conversation.");
-      }
-
-      setConversation(data.inquiry);
-      setMessages(Array.isArray(data.messages) ? data.messages : []);
-
-      if (typeof data.currentUserId === "string") {
-        setCurrentUserId(data.currentUserId);
-      }
-
-      setError("");
-    } catch (err) {
-      if (!silent || initialLoadRef.current) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Unable to load conversation."
+      try {
+        const response = await fetch(
+          `/api/inquiries/${encodeURIComponent(
+            inquiryId
+          )}/messages`,
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }
         );
-      }
-    } finally {
-      requestInProgressRef.current = false;
-      initialLoadRef.current = false;
-      setLoading(false);
-    }
-  }, [inquiryId]);
 
+        if (response.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+
+        if (response.status === 403 || response.status === 404) {
+          setConversation(null);
+          setMessages([]);
+          setCurrentUserId(null);
+
+          throw new Error(
+            "This conversation does not exist or you do not have permission to access it."
+          );
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || "Unable to load conversation."
+          );
+        }
+
+        if (
+          typeof data.currentUserId !== "string" ||
+          !data.currentUserId
+        ) {
+          throw new Error(
+            "Unable to verify your account for this conversation. Please refresh the page."
+          );
+        }
+
+        setConversation(data.inquiry);
+        setCurrentUserId(data.currentUserId);
+
+        setMessages(
+          Array.isArray(data.messages) ? data.messages : []
+        );
+
+        setError("");
+      } catch (err) {
+        if (!silent || initialLoadRef.current) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load conversation."
+          );
+        }
+      } finally {
+        requestInProgressRef.current = false;
+        initialLoadRef.current = false;
+        setLoading(false);
+      }
+    },
+    [inquiryId]
+  );
+
+  // Initial conversation load and automatic refresh.
   useEffect(() => {
     void loadConversation();
 
@@ -115,10 +147,14 @@ function ConversationContent() {
       }
     }
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
 
     return () => {
       window.clearInterval(intervalId);
+
       document.removeEventListener(
         "visibilitychange",
         handleVisibilityChange
@@ -126,16 +162,26 @@ function ConversationContent() {
     };
   }, [loadConversation]);
 
+  // Scroll to the latest message.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [messages.length]);
 
-  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+  async function sendMessage(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     const message = draft.trim();
 
-    if (!message || sendingRef.current || message.length > 3000) {
+    if (
+      !message ||
+      sendingRef.current ||
+      message.length > 3000 ||
+      !conversation
+    ) {
       return;
     }
 
@@ -146,11 +192,15 @@ function ConversationContent() {
 
     try {
       const response = await fetch(
-        `/api/inquiries/${encodeURIComponent(inquiryId)}/messages`,
+        `/api/inquiries/${encodeURIComponent(
+          inquiryId
+        )}/messages`,
         {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ message }),
         }
       );
@@ -163,7 +213,9 @@ function ConversationContent() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Unable to send message.");
+        throw new Error(
+          data.error || "Unable to send message."
+        );
       }
 
       if (data.message) {
@@ -181,11 +233,13 @@ function ConversationContent() {
       setDraft("");
       setNotice("Message sent.");
 
-      // Refresh the conversation to ensure the server remains the source of truth.
+      // Refresh to ensure the server remains the source of truth.
       await loadConversation(true);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to send message."
+        err instanceof Error
+          ? err.message
+          : "Unable to send message."
       );
     } finally {
       sendingRef.current = false;
@@ -259,8 +313,33 @@ function ConversationContent() {
           >
             {loading ? (
               <div className="flex flex-1 items-center justify-center gap-3 text-sm text-[#68776A]">
-                <LoaderCircle size={20} className="animate-spin" />
+                <LoaderCircle
+                  size={20}
+                  className="animate-spin"
+                />
                 Loading messages...
+              </div>
+            ) : !conversation ? (
+              <div className="py-12 text-center">
+                <MessageCircle
+                  size={30}
+                  className="mx-auto mb-3 text-[#879084]"
+                />
+
+                <p className="text-sm font-semibold text-[#435746]">
+                  Conversation unavailable
+                </p>
+
+                <p className="mt-2 text-sm text-[#68776A]">
+                  You cannot view this conversation.
+                </p>
+
+                <Link
+                  href="/dashboard/messages"
+                  className="mt-5 inline-block text-sm font-semibold text-[#17472D] underline underline-offset-4"
+                >
+                  Return to messages
+                </Link>
               </div>
             ) : messages.length === 0 ? (
               <p className="py-12 text-center text-sm text-[#68776A]">
@@ -283,7 +362,9 @@ function ConversationContent() {
                   >
                     <p
                       className={`text-xs font-bold ${
-                        isOwnMessage ? "text-[#E4F0DE]" : "text-[#17472D]"
+                        isOwnMessage
+                          ? "text-[#E4F0DE]"
+                          : "text-[#17472D]"
                       }`}
                     >
                       {isOwnMessage ? "You" : message.senderName}
@@ -295,17 +376,18 @@ function ConversationContent() {
 
                     <p
                       className={`mt-2 text-[10px] ${
-                        isOwnMessage ? "text-[#D2E2D0]" : "text-[#879084]"
+                        isOwnMessage
+                          ? "text-[#D2E2D0]"
+                          : "text-[#879084]"
                       }`}
                     >
                       {message.createdAt
-                        ? new Date(message.createdAt).toLocaleString(
-                            "en-GH",
-                            {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            }
-                          )
+                        ? new Date(
+                            message.createdAt
+                          ).toLocaleString("en-GH", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })
                         : ""}
                     </p>
                   </article>
@@ -316,49 +398,62 @@ function ConversationContent() {
             <div ref={messagesEndRef} />
           </section>
 
-          <form
-            onSubmit={sendMessage}
-            className="border-t border-[#E0E5D9] p-4 sm:p-5"
-          >
-            <label
-              htmlFor="message"
-              className="mb-2 block text-sm font-semibold"
+          {/* Only participants with a successfully loaded conversation
+              can see and use the message composer. */}
+          {conversation && (
+            <form
+              onSubmit={sendMessage}
+              className="border-t border-[#E0E5D9] p-4 sm:p-5"
             >
-              Your message
-            </label>
-
-            <textarea
-              id="message"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              maxLength={3000}
-              rows={3}
-              required
-              placeholder="Write your message..."
-              className="w-full resize-y rounded-xl border border-[#D9E1D5] bg-white p-3 text-sm outline-none focus:border-[#17472D]"
-            />
-
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span className="text-xs text-[#879084]">
-                {draft.length}/3000 characters
-              </span>
-
-              <button
-                type="submit"
-                disabled={
-                  sending || loading || !draft.trim() || draft.trim().length > 3000
-                }
-                className="inline-flex items-center gap-2 rounded-xl bg-[#17472D] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#235C3B] disabled:cursor-not-allowed disabled:opacity-50"
+              <label
+                htmlFor="message"
+                className="mb-2 block text-sm font-semibold"
               >
-                {sending ? (
-                  <LoaderCircle size={16} className="animate-spin" />
-                ) : (
-                  <Send size={16} />
-                )}
-                {sending ? "Sending..." : "Send message"}
-              </button>
-            </div>
-          </form>
+                Your message
+              </label>
+
+              <textarea
+                id="message"
+                value={draft}
+                onChange={(event) =>
+                  setDraft(event.target.value)
+                }
+                maxLength={3000}
+                rows={3}
+                required
+                placeholder="Write your message..."
+                className="w-full resize-y rounded-xl border border-[#D9E1D5] bg-white p-3 text-sm outline-none focus:border-[#17472D]"
+              />
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-xs text-[#879084]">
+                  {draft.length}/3000 characters
+                </span>
+
+                <button
+                  type="submit"
+                  disabled={
+                    sending ||
+                    loading ||
+                    !draft.trim() ||
+                    draft.trim().length > 3000
+                  }
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#17472D] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#235C3B] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sending ? (
+                    <LoaderCircle
+                      size={16}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Send size={16} />
+                  )}
+
+                  {sending ? "Sending..." : "Send message"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </main>

@@ -1,5 +1,4 @@
 
-
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
@@ -9,11 +8,14 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const ALLOWED_STATUSES = ["read", "responded"] as const;
+
 export async function PATCH(
   request: NextRequest,
   context: RouteContext
 ) {
   try {
+    // 1. Authenticate the user
     const user = await getCurrentUser();
 
     if (!user) {
@@ -23,25 +25,54 @@ export async function PATCH(
       );
     }
 
+    // 2. Validate the inquiry ID
     const { id } = await context.params;
 
-    if (!ObjectId.isValid(id)) {
+    if (!/^[a-fA-F0-9]{24}$/.test(id)) {
       return NextResponse.json(
         { error: "Invalid inquiry ID." },
         { status: 400 }
       );
     }
 
-    const body = await request.json();
+    // 3. Safely parse the request body
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON request body." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("status" in body)
+    ) {
+      return NextResponse.json(
+        { error: "A valid status is required." },
+        { status: 400 }
+      );
+    }
+
     const status = body.status;
 
-    if (!["read", "responded"].includes(status)) {
+    if (
+      typeof status !== "string" ||
+      !ALLOWED_STATUSES.includes(
+        status as (typeof ALLOWED_STATUSES)[number]
+      )
+    ) {
       return NextResponse.json(
         { error: "Status must be read or responded." },
         { status: 400 }
       );
     }
 
+    // 4. Update only an inquiry owned by this seller
     const db = await getDatabase();
     const inquiries = db.collection("inquiries");
 
@@ -58,21 +89,11 @@ export async function PATCH(
       }
     );
 
+    // 5. Do not reveal whether another user's inquiry exists
     if (result.matchedCount === 0) {
-      const existing = await inquiries.findOne({
-        _id: new ObjectId(id),
-      });
-
-      if (!existing) {
-        return NextResponse.json(
-          { error: "Inquiry not found." },
-          { status: 404 }
-        );
-      }
-
       return NextResponse.json(
-        { error: "Only the seller can update this inquiry." },
-        { status: 403 }
+        { error: "Inquiry not found or you are not authorized to update it." },
+        { status: 404 }
       );
     }
 
@@ -89,4 +110,3 @@ export async function PATCH(
     );
   }
 }
-
