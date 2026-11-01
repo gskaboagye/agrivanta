@@ -100,37 +100,7 @@ export default function Home() {
         Connecting Ghana&apos;s agricultural value chain
       </div>
 
-      <header className="sticky top-0 z-30 border-b border-[#E7E4D9] bg-[#F8F6EE]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <a href="/" className="flex shrink-0 items-center gap-2.5" aria-label="AgriVanta home">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#17472D] text-[#D9A441]">
-              <Sprout size={27} strokeWidth={1.8} />
-            </span>
-            <span>
-              <span className="block text-xl font-extrabold tracking-tight sm:text-2xl">AgriVanta</span>
-              <span className="hidden text-[10px] font-semibold uppercase tracking-[0.12em] text-[#71806F] sm:block">
-                Powering Every Link in Agriculture
-              </span>
-            </span>
-          </a>
 
-          <nav className="hidden items-center gap-5 text-sm font-semibold lg:flex" aria-label="Main navigation">
-            <a href="/products" className="transition hover:text-[#9B741F]">Marketplace</a>
-            <a href="#categories" className="transition hover:text-[#9B741F]">Categories</a>
-            <a href="/agriguide" className="transition hover:text-[#9B741F]">AgriGuide</a>
-            <a href="#how-it-works" className="transition hover:text-[#9B741F]">How it works</a>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <a href="/login" className="hidden rounded-lg px-3 py-2.5 text-sm font-semibold transition hover:bg-[#EDEBDD] sm:inline-flex">
-              Sign in
-            </a>
-            <a href="/register" className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-[#235B3A] sm:px-4">
-              Get started <ArrowRight size={16} />
-            </a>
-          </div>
-        </div>
-      </header>
 
       {/* Hero */}
       <section className="relative isolate overflow-hidden bg-[#17472D]">

@@ -809,39 +809,22 @@ export default function AgriGuidePage() {
   return (
     <main className="min-h-screen bg-[#F8F6EE] text-[#183D2A] print:bg-white">
       <header className="border-b border-[#E2E7DD] bg-white">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen((current) => !current)}
-              aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#E0E5DA] text-[#17472D] hover:bg-[#F8FAF5]"
-            >
-              {isSidebarOpen ? (
-                <PanelLeftClose size={19} />
-              ) : (
-                <PanelLeftOpen size={19} />
-              )}
-            </button>
-
-            <Link
-              href="/"
-              className="text-2xl font-extrabold"
-              aria-label="AgriVanta home"
-            >
-              Agri<span className="text-[#D9A441]">Vanta</span>
-            </Link>
-          </div>
-
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm font-semibold text-[#526658] hover:text-[#17472D]"
-          >
-            <ArrowLeft size={17} />
-            <span className="hidden sm:inline">{t.back}</span>
-          </Link>
-        </div>
-      </header>
+  <div className="mx-auto flex max-w-[1600px] items-center px-5 py-3">
+    <button
+      type="button"
+      onClick={() => setIsSidebarOpen((current) => !current)}
+      aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+      aria-expanded={isSidebarOpen}
+      className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#E0E5DA] text-[#17472D] transition hover:bg-[#F8FAF5]"
+    >
+      {isSidebarOpen ? (
+        <PanelLeftClose size={19} />
+      ) : (
+        <PanelLeftOpen size={19} />
+      )}
+    </button>
+  </div>
+</header>
 
       <div className="mx-auto flex max-w-[1600px] gap-6 px-4 py-6 sm:px-5 lg:py-8">
         {/* Conversation sidebar */}
@@ -1329,3 +1312,4 @@ export default function AgriGuidePage() {
     </main>
   );
 }
+

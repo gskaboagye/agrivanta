@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import {
@@ -11,12 +11,10 @@ import {
   MessageSquare,
   MessageCircle,
   CheckCircle2,
-  ChevronDown,
   CircleHelp,
   Compass,
   LayoutDashboard,
   Leaf,
-  LogOut,
   Menu,
   Package,
   Plus,
@@ -407,8 +405,7 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -521,30 +518,6 @@ export default function DashboardShell({
       listing.location.toLowerCase().includes(searchText)
     );
   });
-
-  async function handleLogout() {
-    if (loggingOut) return;
-
-    setLoggingOut(true);
-    setAccountMenuOpen(false);
-
-    try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to log out.");
-      }
-
-      router.replace("/login");
-      router.refresh();
-    } catch {
-      setLoggingOut(false);
-      window.alert("We could not log you out. Please try again.");
-    }
-  }
 
   return (
     <div className="min-h-screen bg-[#F7F8F4] text-[#243629]">
@@ -707,93 +680,7 @@ export default function DashboardShell({
               )}
             </div>
 
-            <div className="hidden h-8 w-px bg-[#e7eae2] sm:block" />
-
-            <div className="relative">
-              <button
-                type="button"
-                aria-label="Open account menu"
-                aria-haspopup="menu"
-                aria-expanded={accountMenuOpen}
-                onClick={() => setAccountMenuOpen((open) => !open)}
-                className="flex h-10 items-center gap-2 rounded-xl border border-[#e7eae2] bg-white px-2.5 text-left transition hover:bg-[#f5f7f2] sm:gap-3 sm:px-3"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#17472D] text-[11px] font-bold text-white">
-                  {(user.name.trim().charAt(0) || "U").toUpperCase()}
-                </span>
-                <span className="hidden min-w-0 text-right sm:block">
-                  <span className="block max-w-32 truncate text-xs font-bold text-[#26372b]">
-                    {user.name}
-                  </span>
-                  <span className="block text-[10px] text-[#899286]">
-                    {details.label}
-                  </span>
-                </span>
-                <ChevronDown
-                  size={15}
-                  className={`shrink-0 text-[#718071] transition-transform ${
-                    accountMenuOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {accountMenuOpen && (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Close account menu"
-                    className="fixed inset-0 z-40 cursor-default"
-                    onClick={() => setAccountMenuOpen(false)}
-                  />
-                  <div
-                    role="menu"
-                    aria-label="Account options"
-                    className="absolute right-0 z-50 mt-3 w-64 overflow-hidden rounded-2xl border border-[#e8ebe4] bg-white py-2 shadow-xl"
-                  >
-                    <div className="border-b border-[#edf0e9] px-4 py-3">
-                      <p className="truncate text-sm font-bold text-[#26372b]">
-                        {user.name}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-[#879084]">
-                        {user.email}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[#9B741F]">
-                        {details.label} account
-                      </p>
-                    </div>
-
-                    <Link
-                      href="/dashboard"
-                      role="menuitem"
-                      onClick={() => setAccountMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#526252] transition hover:bg-[#f5f7f2] hover:text-[#17472D]"
-                    >
-                      <LayoutDashboard size={17} />
-                      My Dashboard
-                    </Link>
-                    <Link
-                      href="/dashboard/profile"
-                      role="menuitem"
-                      onClick={() => setAccountMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#526252] transition hover:bg-[#f5f7f2] hover:text-[#17472D]"
-                    >
-                      <UserRound size={17} />
-                      My Profile
-                    </Link>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={loggingOut}
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-                    >
-                      <LogOut size={17} />
-                      {loggingOut ? "Signing out..." : "Sign out"}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            
           </div>
         </header>
 
@@ -1025,7 +912,7 @@ export default function DashboardShell({
                           {listing.title}
                         </p>
                         <p className="mt-1 truncate text-[11px] text-[#879084]">
-                          {listing.category} · {listing.location}
+                          {listing.category} Â· {listing.location}
                         </p>
                         <p className="mt-1 text-[10px] text-[#a0a79b]">
                           {formatDate(listing.date)}
@@ -1106,7 +993,7 @@ export default function DashboardShell({
             className="mt-10 flex flex-col gap-2 border-t border-[#e5e9e0] py-6 text-[11px] text-[#929a8e] sm:flex-row sm:items-center sm:justify-between"
           >
             <p>
-              © {new Date().getFullYear()} AgriVanta. Powering Every Link in
+              Â© {new Date().getFullYear()} AgriVanta. Powering Every Link in
               Agriculture.
             </p>
             <p className="flex items-center gap-2">
@@ -1119,3 +1006,5 @@ export default function DashboardShell({
     </div>
   );
 }
+
+

@@ -457,42 +457,6 @@ function ProductsBrowser() {
         AgriVanta Marketplace — Products, Workers and Agricultural Experts
       </div>
 
-      <header className="border-b border-[#E7E4D9] bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <a href="/" className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#17472D] text-[#D9A441]">
-              <ShoppingBag size={24} />
-            </span>
-
-            <span>
-              <span className="block text-xl font-extrabold">
-                AgriVanta
-              </span>
-              <span className="text-xs text-[#718071]">
-                Marketplace
-              </span>
-            </span>
-          </a>
-
-          <div className="flex items-center gap-3">
-            <a
-              href="/"
-              className="hidden text-sm font-semibold hover:text-[#9B741F] sm:inline"
-            >
-              Homepage
-            </a>
-
-            <a
-              href="/register?role=seller"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#235B3A]"
-            >
-              <Store size={16} />
-              Join AgriVanta
-            </a>
-          </div>
-        </div>
-      </header>
-
       <section className="bg-[#17472D] px-4 py-12 text-white sm:py-16">
         <div className="mx-auto max-w-7xl">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E6BD57]">
@@ -1045,3 +1009,4 @@ export default function ProductsPage() {
     </Suspense>
   );
 }
+

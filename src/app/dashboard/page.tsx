@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import {
   ArrowRight,
@@ -240,6 +241,8 @@ function BuyerDashboard({
 }
 
 export default async function DashboardPage() {
+  await connection();
+
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
