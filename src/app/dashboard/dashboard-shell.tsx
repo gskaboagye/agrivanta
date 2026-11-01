@@ -11,6 +11,7 @@ import {
   MessageSquare,
   MessageCircle,
   CheckCircle2,
+  ChevronDown,
   CircleHelp,
   Compass,
   LayoutDashboard,
@@ -407,6 +408,7 @@ export default function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -524,6 +526,7 @@ export default function DashboardShell({
     if (loggingOut) return;
 
     setLoggingOut(true);
+    setAccountMenuOpen(false);
 
     try {
       const response = await fetch("/api/auth/logout", {
@@ -706,26 +709,91 @@ export default function DashboardShell({
 
             <div className="hidden h-8 w-px bg-[#e7eae2] sm:block" />
 
-            <div className="hidden text-right sm:block">
-              <p className="max-w-32 truncate text-xs font-bold text-[#26372b]">
-                {user.name}
-              </p>
-              <p className="text-[10px] text-[#899286]">{details.label}</p>
-            </div>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Open account menu"
+                aria-haspopup="menu"
+                aria-expanded={accountMenuOpen}
+                onClick={() => setAccountMenuOpen((open) => !open)}
+                className="flex h-10 items-center gap-2 rounded-xl border border-[#e7eae2] bg-white px-2.5 text-left transition hover:bg-[#f5f7f2] sm:gap-3 sm:px-3"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#17472D] text-[11px] font-bold text-white">
+                  {(user.name.trim().charAt(0) || "U").toUpperCase()}
+                </span>
+                <span className="hidden min-w-0 text-right sm:block">
+                  <span className="block max-w-32 truncate text-xs font-bold text-[#26372b]">
+                    {user.name}
+                  </span>
+                  <span className="block text-[10px] text-[#899286]">
+                    {details.label}
+                  </span>
+                </span>
+                <ChevronDown
+                  size={15}
+                  className={`shrink-0 text-[#718071] transition-transform ${
+                    accountMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
 
-            <button
-              type="button"
-              title="Log out"
-              aria-label="Log out"
-              disabled={loggingOut}
-              onClick={handleLogout}
-              className="flex h-10 items-center gap-2 rounded-xl border border-[#e7eae2] px-3 text-xs font-semibold text-[#526252] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-            >
-              <LogOut size={16} />
-              <span className="hidden md:inline">
-                {loggingOut ? "Signing out..." : "Log out"}
-              </span>
-            </button>
+              {accountMenuOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close account menu"
+                    className="fixed inset-0 z-40 cursor-default"
+                    onClick={() => setAccountMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    aria-label="Account options"
+                    className="absolute right-0 z-50 mt-3 w-64 overflow-hidden rounded-2xl border border-[#e8ebe4] bg-white py-2 shadow-xl"
+                  >
+                    <div className="border-b border-[#edf0e9] px-4 py-3">
+                      <p className="truncate text-sm font-bold text-[#26372b]">
+                        {user.name}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-[#879084]">
+                        {user.email}
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[#9B741F]">
+                        {details.label} account
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/dashboard"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#526252] transition hover:bg-[#f5f7f2] hover:text-[#17472D]"
+                    >
+                      <LayoutDashboard size={17} />
+                      My Dashboard
+                    </Link>
+                    <Link
+                      href="/dashboard/profile"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#526252] transition hover:bg-[#f5f7f2] hover:text-[#17472D]"
+                    >
+                      <UserRound size={17} />
+                      My Profile
+                    </Link>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={loggingOut}
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                    >
+                      <LogOut size={17} />
+                      {loggingOut ? "Signing out..." : "Sign out"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
