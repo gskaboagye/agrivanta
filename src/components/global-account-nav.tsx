@@ -122,6 +122,10 @@ export default function GlobalAccountNav() {
     }
   }
 
+  if (pathname === "/login" || pathname === "/register") {
+    return null;
+  }
+
   return (
     <header className="relative z-50 border-b border-[#E4E9E1] bg-white">
       <div className="mx-auto flex min-h-[68px] max-w-7xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -301,4 +305,5 @@ export default function GlobalAccountNav() {
     </header>
   );
 }
+
 
