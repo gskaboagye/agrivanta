@@ -122,7 +122,6 @@ export default function CreateListingPage() {
   const permittedTypes = roleListingTypes[accountRole] ?? [];
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
-  const [subcategory, setSubcategory] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [priceUnit, setPriceUnit] = useState("per unit");
@@ -380,7 +379,6 @@ export default function CreateListingPage() {
           title: title.trim(),
           type,
           category: category.trim(),
-          subcategory: subcategory.trim(),
           description: description.trim(),
           price: numericPrice,
           priceUnit: priceUnit.trim(),
@@ -536,16 +534,7 @@ export default function CreateListingPage() {
               />
             </label>
 
-            <label className="text-sm font-semibold">
-              Subcategory
-              <input
-                maxLength={100}
-                value={subcategory}
-                onChange={(event) => setSubcategory(event.target.value)}
-                placeholder="Optional"
-                className={inputClass}
-              />
-            </label>
+
 
             <label className="text-sm font-semibold">
               Region *

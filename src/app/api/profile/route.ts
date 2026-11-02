@@ -1,4 +1,4 @@
-﻿
+
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
@@ -27,6 +27,7 @@ export async function GET() {
           role: 1,
           phonePublic: 1,
           whatsappEnabled: 1,
+          emailPublic: 1,
         },
       }
     );
@@ -49,6 +50,7 @@ export async function GET() {
         phonePublic: hasPhone && profile.phonePublic !== false,
         whatsappEnabled:
           hasPhone && profile.whatsappEnabled !== false,
+        emailPublic: profile.emailPublic === true,
       },
     });
   } catch (error) {
@@ -86,6 +88,7 @@ export async function PATCH(request: Request) {
     let phone = typeof data.phone === "string" ? data.phone.trim() : "";
     const phonePublic = data.phonePublic;
     const whatsappEnabled = data.whatsappEnabled;
+    const emailPublic = data.emailPublic;
 
     if (name.length < 2 || name.length > 80) {
       return NextResponse.json(
@@ -109,7 +112,8 @@ export async function PATCH(request: Request) {
     phone = phoneResult.data;
 
     if (typeof phonePublic !== "boolean" ||
-        typeof whatsappEnabled !== "boolean") {
+        typeof whatsappEnabled !== "boolean" ||
+        typeof emailPublic !== "boolean") {
       return NextResponse.json(
         { message: "Choose valid contact preferences." },
         { status: 400 }
@@ -140,6 +144,7 @@ export async function PATCH(request: Request) {
           phone,
           phonePublic: phonePublic && Boolean(phone),
           whatsappEnabled: whatsappEnabled && Boolean(phone),
+          emailPublic,
           updatedAt: new Date(),
         },
       }
@@ -162,6 +167,7 @@ export async function PATCH(request: Request) {
         role: currentUser.role,
         phonePublic: phonePublic && Boolean(phone),
         whatsappEnabled: whatsappEnabled && Boolean(phone),
+        emailPublic,
       },
     });
   } catch (error) {

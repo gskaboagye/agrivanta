@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
@@ -22,6 +22,7 @@ type Profile = {
   role: string;
   phonePublic: boolean;
   whatsappEnabled: boolean;
+  emailPublic: boolean;
 };
 
 const initialProfile: Profile = {
@@ -31,6 +32,7 @@ const initialProfile: Profile = {
   role: "",
   phonePublic: true,
   whatsappEnabled: true,
+  emailPublic: false,
 };
 
 export default function ProfileSettingsPage() {
@@ -126,6 +128,7 @@ export default function ProfileSettingsPage() {
           phone: phoneResult.data,
           phonePublic: profile.phonePublic,
           whatsappEnabled: profile.whatsappEnabled,
+          emailPublic: profile.emailPublic,
         }),
       });
 
@@ -345,7 +348,27 @@ export default function ProfileSettingsPage() {
               </label>
             </div>
 
-            <div className="mt-5 flex gap-3 rounded-xl bg-[#F8F6EE] p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+  <input
+    type="checkbox"
+    checked={profile.emailPublic}
+    onChange={(event) =>
+      updateField("emailPublic", event.target.checked)
+    }
+    className="mt-1 h-4 w-4 accent-[#17472D]"
+  />
+  <span>
+    <span className="block text-sm font-semibold">
+      Allow public email contact
+    </span>
+    <span className="mt-1 block text-xs leading-5 text-[#879084]">
+      Visitors can see your account email address on your public
+      listings when this option is enabled. Keep it off to keep
+      your email private.
+    </span>
+  </span>
+</label>
+<div className="mt-5 flex gap-3 rounded-xl bg-[#F8F6EE] p-4">
               <LockKeyhole size={19} className="mt-0.5 shrink-0 text-[#806020]" />
               <p className="text-xs leading-5 text-[#6f6958]">
                 Your phone number and WhatsApp contact are public by default

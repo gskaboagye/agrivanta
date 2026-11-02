@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -24,6 +24,8 @@ import {
   Clock,
   Users,
   MessageCircle,
+  Phone,
+  Mail,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
@@ -46,6 +48,9 @@ type Listing = {
   location: string;
   seller: string;
   sellerProfileId: string | null;
+  sellerPhone: string;
+  sellerWhatsappEnabled: boolean;
+  sellerEmail: string;
   image: string;
   mediaCount: number;
   skills?: string[];
@@ -192,6 +197,15 @@ function ProductsBrowser() {
                 item.sellerProfileId.trim().length > 0
                   ? item.sellerProfileId.trim()
                   : null,
+              sellerPhone:
+                typeof item.sellerPhone === "string"
+                  ? item.sellerPhone.trim()
+                  : "",
+              sellerWhatsappEnabled: item.sellerWhatsappEnabled === true,
+              sellerEmail:
+                typeof item.sellerEmail === "string"
+                  ? item.sellerEmail.trim()
+                  : "",
               image:
                 typeof item.image === "string" &&
                 item.image.trim().length > 0
@@ -826,6 +840,45 @@ function ProductsBrowser() {
                           <span>{listing.seller}</span>
                         )}
                       </p>
+
+                      {(listing.sellerPhone || listing.sellerEmail) && (
+                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                          {listing.sellerPhone && (
+                            <a
+                              href={`tel:${listing.sellerPhone.replace(/[^\d+]/g, "")}`}
+                              className="inline-flex items-center gap-2 font-medium text-[#17472D] hover:text-[#9B741F] hover:underline"
+                              aria-label={`Call ${listing.seller}`}
+                            >
+                              <Phone size={15} />
+                              Call
+                            </a>
+                          )}
+
+                          {listing.sellerPhone && listing.sellerWhatsappEnabled && (
+                            <a
+                              href={`https://wa.me/${listing.sellerPhone.replace(/\D/g, "").replace(/^0/, "233")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 font-medium text-[#17472D] hover:text-[#9B741F] hover:underline"
+                              aria-label={`Message ${listing.seller} on WhatsApp`}
+                            >
+                              <MessageCircle size={15} />
+                              WhatsApp
+                            </a>
+                          )}
+
+                          {listing.sellerEmail && (
+                            <a
+                              href={`mailto:${listing.sellerEmail}`}
+                              className="inline-flex items-center gap-2 font-medium text-[#17472D] hover:text-[#9B741F] hover:underline"
+                              aria-label={`Email ${listing.seller}`}
+                            >
+                              <Mail size={15} />
+                              Email
+                            </a>
+                          )}
+                        </div>
+                      )}
 
                       <div className="mt-4 flex items-start gap-2 rounded-lg bg-[#FCF6E6] p-3">
                         <Info

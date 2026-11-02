@@ -1,7 +1,8 @@
-
+﻿
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 
 import { getCurrentUser } from "@/lib/auth";
@@ -478,6 +479,60 @@ export async function GET(request: NextRequest) {
 
 
 
+    const sellerIds = Array.from(
+      new Set(
+        listings
+          .map((listing) => getSellerProfileId(listing))
+          .filter(
+            (id): id is string =>
+              typeof id === "string" && ObjectId.isValid(id)
+          )
+      )
+    );
+
+    const sellers = sellerIds.length
+      ? await db.collection("users").find(
+          {
+            _id: {
+              $in: sellerIds.map((id) => new ObjectId(id)),
+            },
+          },
+          {
+            projection: {
+              phone: 1,
+              phonePublic: 1,
+              whatsappEnabled: 1,
+              email: 1,
+              emailPublic: 1,
+            },
+          }
+        ).toArray()
+      : [];
+
+    const sellerContacts = new Map(
+      sellers.map((seller) => {
+        const phone =
+          typeof seller.phone === "string" &&
+          seller.phonePublic !== false
+            ? seller.phone.trim()
+            : "";
+
+        return [
+          seller._id.toString(),
+          {
+            phone,
+            whatsappEnabled:
+              Boolean(phone) && seller.whatsappEnabled !== false,
+            email:
+              seller.emailPublic === true &&
+              typeof seller.email === "string"
+                ? seller.email.trim()
+                : "",
+          },
+        ];
+      })
+    );
+
     return NextResponse.json({
 
       success: true,
@@ -500,6 +555,13 @@ export async function GET(request: NextRequest) {
         town: document.town ?? "",
         seller: document.seller ?? "Seller not specified",
         sellerProfileId: getSellerProfileId(document),
+        sellerPhone:
+          sellerContacts.get(getSellerProfileId(document) ?? "")?.phone ?? "",
+        sellerWhatsappEnabled:
+          sellerContacts.get(getSellerProfileId(document) ?? "")
+            ?.whatsappEnabled ?? false,
+        sellerEmail:
+          sellerContacts.get(getSellerProfileId(document) ?? "")?.email ?? "",
         image: document.image ?? "",
         images: document.images ?? [],
         videos: document.videos ?? [],
@@ -1207,3 +1269,4 @@ export async function POST(request: NextRequest) {
   }
 
 }
+
