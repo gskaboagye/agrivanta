@@ -1,4 +1,4 @@
-
+﻿
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
@@ -180,11 +180,12 @@ export async function GET(
       };
     });
 
-    // Missing preferences on older accounts default to private.
-    const hasPhone = Boolean(seller.phone?.trim());
-    const phonePublic = seller.phonePublic === true && hasPhone;
-    const whatsappEnabled =
-      phonePublic && seller.whatsappEnabled === true;
+    // Contact details are public by default when a phone number exists.
+// Sellers can still explicitly opt out by setting a preference to false.
+const hasPhone = Boolean(seller.phone?.trim());
+const phonePublic = hasPhone && seller.phonePublic !== false;
+const whatsappEnabled =
+  phonePublic && seller.whatsappEnabled !== false;
 
     return NextResponse.json(
       {
@@ -217,3 +218,4 @@ export async function GET(
     );
   }
 }
+

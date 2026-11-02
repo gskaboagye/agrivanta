@@ -38,14 +38,17 @@ export async function GET() {
       );
     }
 
+    const hasPhone = Boolean(String(profile.phone ?? "").trim());
+
     return NextResponse.json({
       profile: {
         name: String(profile.name ?? ""),
         email: String(profile.email ?? ""),
         phone: String(profile.phone ?? ""),
         role: String(profile.role ?? ""),
-        phonePublic: profile.phonePublic === true,
-        whatsappEnabled: profile.whatsappEnabled === true,
+        phonePublic: hasPhone && profile.phonePublic !== false,
+        whatsappEnabled:
+          hasPhone && profile.whatsappEnabled !== false,
       },
     });
   } catch (error) {
@@ -170,3 +173,4 @@ export async function PATCH(request: Request) {
     );
   }
 }
+

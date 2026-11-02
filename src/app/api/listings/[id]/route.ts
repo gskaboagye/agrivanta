@@ -1,4 +1,4 @@
-
+﻿
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
@@ -108,6 +108,98 @@ function isValidCloudinaryUrl(value: unknown): value is string {
   }
 }
 
+export async function GET(
+  _request: NextRequest,
+  context: RouteContext
+) {
+  try {
+    const { id } = await context.params;
+
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid listing ID." },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    const listing = (await db.collection("listings").findOne({
+      _id: new ObjectId(id),
+      status: "active",
+    })) as ListingRecord | null;
+
+    if (!listing) {
+      return NextResponse.json(
+        { success: false, message: "Listing not found." },
+        { status: 404 }
+      );
+    }
+
+    // Resolve the seller profile ID using AgriVanta's existing ownership fields.
+    let sellerProfileId: string | undefined;
+
+    for (const field of ["sellerId", "userId", "ownerId", "createdBy"]) {
+      const value = listing[field];
+
+      if (typeof value === "string" && value.trim()) {
+        sellerProfileId = value.trim();
+        break;
+      }
+
+      if (
+        value !== null &&
+        typeof value === "object" &&
+        "toString" in value &&
+        typeof value.toString === "function"
+      ) {
+        const resolvedId = value.toString();
+
+        if (resolvedId && resolvedId !== "[object Object]") {
+          sellerProfileId = resolvedId;
+          break;
+        }
+      }
+    }
+
+    // Return only fields intended for public listing details.
+    return NextResponse.json({
+      success: true,
+      listing: {
+        id: listing._id?.toString(),
+        title: listing.title ?? "",
+        type: listing.type ?? "",
+        category: listing.category ?? "",
+        subcategory: listing.subcategory ?? "",
+        specifications: listing.specifications ?? {},
+        description: listing.description ?? "",
+        price: listing.price ?? null,
+        priceUnit:
+          listing.priceUnit ?? listing.unit ?? "Price to be confirmed",
+        location: listing.location ?? "",
+        seller: listing.seller ?? "Seller not specified",
+        sellerProfileId,
+        image: listing.image ?? "",
+        images: listing.images ?? [],
+        videos: listing.videos ?? [],
+        media: listing.media ?? [],
+        mediaCount: listing.mediaCount ?? 0,
+        skills: listing.skills ?? [],
+        experience: listing.experience ?? "",
+        availability: listing.availability ?? "",
+        createdAt: listing.createdAt ?? null,
+        updatedAt: listing.updatedAt ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("Get public listing error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to load this listing." },
+      { status: 500 }
+    );
+  }
+}
 export async function PATCH(
   request: NextRequest,
   context: RouteContext
@@ -467,3 +559,4 @@ export async function DELETE(
     );
   }
 }
+

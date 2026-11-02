@@ -29,8 +29,8 @@ const initialProfile: Profile = {
   email: "",
   phone: "",
   role: "",
-  phonePublic: false,
-  whatsappEnabled: false,
+  phonePublic: true,
+  whatsappEnabled: true,
 };
 
 export default function ProfileSettingsPage() {
@@ -188,7 +188,9 @@ export default function ProfileSettingsPage() {
           </div>
           <p className="mt-4 max-w-xl text-sm leading-6 text-white/75">
             Manage your personal details and decide how other people on
-            AgriVanta may contact you. Your phone number is private by default.
+            AgriVanta may contact you. When you add a phone number, public phone
+            and WhatsApp contact are enabled by default. You can change these
+            preferences at any time.
           </p>
         </header>
 
@@ -263,9 +265,15 @@ export default function ProfileSettingsPage() {
                   setProfile((current) => ({
                     ...current,
                     phone,
-                    phonePublic: phone.trim() ? current.phonePublic : false,
+                    phonePublic: phone.trim()
+                      ? current.phone.trim()
+                        ? current.phonePublic
+                        : true
+                      : false,
                     whatsappEnabled: phone.trim()
-                      ? current.whatsappEnabled
+                      ? current.phone.trim()
+                        ? current.whatsappEnabled
+                        : true
                       : false,
                   }));
                   setPhoneError("");
@@ -308,8 +316,8 @@ export default function ProfileSettingsPage() {
                     Allow public phone contact
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-[#879084]">
-                    Allow your phone number to be shown on your public seller
-                    or service listings.
+                    Your phone number is shown on your public seller or service
+                    listings by default. Turn this off to keep it private.
                   </span>
                 </span>
               </label>
@@ -330,8 +338,8 @@ export default function ProfileSettingsPage() {
                     Accept WhatsApp messages
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-[#879084]">
-                    Allow visitors to contact you through WhatsApp when your
-                    phone number is public.
+                    Visitors can contact you through WhatsApp by default when
+                    your phone number is public.
                   </span>
                 </span>
               </label>
@@ -340,9 +348,10 @@ export default function ProfileSettingsPage() {
             <div className="mt-5 flex gap-3 rounded-xl bg-[#F8F6EE] p-4">
               <LockKeyhole size={19} className="mt-0.5 shrink-0 text-[#806020]" />
               <p className="text-xs leading-5 text-[#6f6958]">
-                Your number stays private unless you explicitly enable public
-                phone contact. Removing your number automatically disables
-                public phone and WhatsApp contact.
+                Your phone number and WhatsApp contact are public by default
+                when you add a number. Switch off either option to restrict
+                that contact method. Removing your number automatically
+                disables both options.
               </p>
             </div>
           </section>
@@ -377,4 +386,5 @@ export default function ProfileSettingsPage() {
     </main>
   );
 }
+
 

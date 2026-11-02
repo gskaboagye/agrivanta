@@ -496,6 +496,16 @@ async function sendInquiry(
                   {formatRole(seller.role)}
                 </p>
 
+                {canCall && (
+                  <a
+                    href={`tel:${seller.phone}`}
+                    className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#17472D] hover:text-[#9B741F]"
+                  >
+                    <Phone size={16} />
+                    {seller.phone}
+                  </a>
+                )}
+
                 <div className="mt-4 flex flex-wrap gap-4 text-sm text-[#647367]">
                   {locations.length > 0 && (
                     <span className="flex items-center gap-2">
@@ -648,13 +658,34 @@ async function sendInquiry(
                           )}
                         </p>
 
-                        <button
-                          type="button"
-                          onClick={() => openInquiry(listing)}
-                          className="shrink-0 rounded-lg bg-[#17472D] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#103720]"
-                        >
-                          Contact seller
-                        </button>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <a
+                            href={`/listings/${encodeURIComponent(listing.id)}`}
+                            className="inline-flex items-center justify-center rounded-lg border border-[#17472D] px-4 py-2.5 text-sm font-semibold text-[#17472D] transition hover:bg-[#EAF0E6]"
+                          >
+                            View Details
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => openInquiry(listing)}
+                            className="inline-flex items-center justify-center rounded-lg bg-[#17472D] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#103720]"
+                          >
+                            Contact
+                          </button>
+
+                          {canUseWhatsApp && whatsappNumber && (
+                            <a
+                              href={`https://wa.me/${whatsappNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#C9A227] px-4 py-2.5 text-sm font-semibold text-[#17472D] transition hover:bg-[#FBF7E8]"
+                            >
+                              <MessageCircle size={16} />
+                              Ask on WhatsApp
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </article>
