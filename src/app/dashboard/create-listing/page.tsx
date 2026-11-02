@@ -3,20 +3,97 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
   ImagePlus,
   LoaderCircle,
-  Package,
-  Tractor,
   UploadCloud,
   X,
 } from "lucide-react";
 
-type ListingType = "product" | "hire";
+type ListingType = "product" | "hire" | "service" | "worker" | "expert";
 
+const roleListingTypes: Record<string, ListingType[]> = {
+  farmer: ["product", "hire"],
+  buyer: [],
+  supplier: ["product", "service"],
+  worker: ["worker"],
+  expert: ["expert", "service"],
+};
+
+const listingOptions: {
+  type: ListingType;
+  title: string;
+  description: string;
+}[] = [
+  {
+    type: "product",
+    title: "Products for sale",
+    description: "Crops, vegetables, fruits, livestock and other farm produce.",
+  },
+  {
+    type: "hire",
+    title: "Equipment for hire",
+    description: "Tractors, harvesters, irrigation equipment and machinery.",
+  },
+  {
+    type: "service",
+    title: "Services",
+    description: "Agricultural services, supplies and professional support.",
+  },
+  {
+    type: "worker",
+    title: "Worker listing",
+    description: "Make your agricultural skills and availability known.",
+  },
+  {
+    type: "expert",
+    title: "Expert listing",
+    description: "Offer agricultural expertise and consultancy.",
+  },
+];
+
+
+
+const listingPlaceholders: Record<
+  ListingType,
+  { title: string; category: string; description: string }
+> = {
+  product: {
+    title: "e.g. Fresh maize for sale",
+    category: "e.g. Grains, Vegetables, Livestock",
+    description: "Describe the product, its quality, available quantity, harvest date and other important details.",
+  },
+  hire: {
+    title: "e.g. Tractor available for hire",
+    category: "e.g. Tractors, Harvesters, Irrigation",
+    description: "Describe the equipment, its condition, availability and hire terms.",
+  },
+  service: {
+    title: "e.g. Land preparation service",
+    category: "e.g. Land preparation, Irrigation, Transport",
+    description: "Describe the service, coverage area, experience and what is included.",
+  },
+  worker: {
+    title: "e.g. Experienced farm worker available",
+    category: "e.g. Crop farming, Animal care, Machinery operation",
+    description: "Describe your skills, experience, availability and preferred work arrangements.",
+  },
+  expert: {
+    title: "e.g. Crop production consultant",
+    category: "e.g. Agronomy, Soil science, Veterinary",
+    description: "Describe your area of expertise, qualifications, experience and the support you offer.",
+  },
+};
+const priceUnitsByType: Record<ListingType, string[]> = {
+  product: ["per unit", "per kg", "per bag", "per crate", "per basket", "per tonne", "per animal", "negotiable"],
+  hire: ["per hour", "per day", "per week", "per month", "negotiable"],
+  service: ["per hour", "per day", "per project", "negotiable"],
+  worker: ["per hour", "per day", "per week", "per month", "negotiable"],
+  expert: ["per hour", "per day", "per consultation", "per project", "negotiable"],
+};
 type MediaAsset = {
   secure_url?: string;
   url?: string;
@@ -37,15 +114,22 @@ export default function CreateListingPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+
   const [type, setType] = useState<ListingType>("product");
+  const [accountRole, setAccountRole] = useState("");
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  const permittedTypes = roleListingTypes[accountRole] ?? [];
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [priceUnit, setPriceUnit] = useState("per unit");
-  const [location, setLocation] = useState("");
-  const [specificationsText, setSpecificationsText] = useState("{}");
+  const [region, setRegion] = useState("");
+  const [district, setDistrict] = useState("");
+  const [town, setTown] = useState("");
+
 
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -55,6 +139,48 @@ export default function CreateListingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProfile() {
+      try {
+        const response = await fetch("/api/profile", {
+          credentials: "same-origin",
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.profile?.role) {
+          throw new Error(data.message || "Unable to verify your account type.");
+        }
+
+        if (active) {
+          const role = String(data.profile.role).toLowerCase();
+          setAccountRole(role);
+
+          const allowed = roleListingTypes[role] ?? [];
+          if (allowed.length > 0) {
+            setType(allowed[0]);
+            setPriceUnit(priceUnitsByType[allowed[0]][0]);
+          }
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : "Unable to load your account."
+          );
+        }
+      } finally {
+        if (active) setProfileLoading(false);
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const imageCount = media.filter(
     (item) => item.type !== "video" && item.resource_type !== "video"
@@ -186,6 +312,11 @@ export default function CreateListingPage() {
     setError("");
     setSuccess("");
 
+    if (!permittedTypes.includes(type)) {
+      setError("Your account is not permitted to publish this listing type.");
+      return;
+    }
+
     if (uploading) {
       setError("Please wait for your uploads to finish.");
       return;
@@ -206,23 +337,29 @@ export default function CreateListingPage() {
       return;
     }
 
-    let specifications: Record<string, unknown>;
-
-    try {
-      const parsed: unknown = JSON.parse(specificationsText || "{}");
-
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Specifications must be a JSON object.");
-      }
-
-      specifications = parsed as Record<string, unknown>;
-    } catch {
-      setError(
-        'Specifications must be valid JSON. For example: {"quantity": "100 kg"}.'
-      );
+    if (!region.trim() || !town.trim()) {
+      setError("Please select a region and enter your town or community.");
       return;
     }
 
+    const ghanaRegions = [
+      "Ahafo", "Ashanti", "Bono", "Bono East",
+      "Central", "Eastern", "Greater Accra", "North East",
+      "Northern", "Oti", "Savannah", "Upper East",
+      "Upper West", "Volta", "Western", "Western North",
+    ];
+
+    if (!ghanaRegions.includes(region)) {
+      setError("Please select a valid Ghana region.");
+      return;
+    }
+
+    const combinedLocation = [
+      town.trim(),
+      district.trim(),
+      region.trim(),
+      "Ghana",
+    ].filter(Boolean).join(", ");
     const numericPrice = Number(price);
 
     if (!Number.isFinite(numericPrice) || numericPrice < 0) {
@@ -247,8 +384,10 @@ export default function CreateListingPage() {
           description: description.trim(),
           price: numericPrice,
           priceUnit: priceUnit.trim(),
-          location: location.trim(),
-          specifications,
+          location: combinedLocation,
+          region: region.trim(),
+          district: district.trim(),
+          town: town.trim(),
           image: images[0],
           images,
           videos,
@@ -280,6 +419,41 @@ export default function CreateListingPage() {
   const inputClass =
     "mt-2 w-full rounded-xl border border-[#DCE3D6] bg-white px-4 py-3 text-sm text-[#243629] outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10";
 
+  if (profileLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F7F8F4] px-4 text-[#243629]">
+        <div className="flex items-center gap-3 rounded-xl bg-white p-6 shadow-sm">
+          <LoaderCircle className="animate-spin text-[#17472D]" size={22} />
+          <p className="text-sm font-medium">Verifying your account...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!accountRole || permittedTypes.length === 0) {
+    const isBuyer = accountRole === "buyer";
+
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F7F8F4] px-4 py-8 text-[#243629]">
+        <section className="w-full max-w-lg rounded-2xl border border-[#E5E9E0] bg-white p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-extrabold text-[#17472D]">
+            {isBuyer ? "Listing creation unavailable" : "Unable to create a listing"}
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-[#758071]">
+            {isBuyer
+              ? "Buyer accounts can browse the AgriVanta marketplace and contact listing owners, but cannot publish listings."
+              : error || "Your account type does not currently have permission to create listings. Please contact support if you believe this is incorrect."}
+          </p>
+          <Link
+            href="/dashboard"
+            className="mt-6 inline-flex items-center justify-center rounded-xl bg-[#17472D] px-5 py-3 text-sm font-semibold text-white hover:bg-[#103921]"
+          >
+            Back to dashboard
+          </Link>
+        </section>
+      </main>
+    );
+  }
   return (
     <main className="min-h-screen bg-[#F7F8F4] px-4 py-8 text-[#243629] sm:px-8">
       <div className="mx-auto max-w-4xl">
@@ -301,8 +475,7 @@ export default function CreateListingPage() {
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-[#758071]">
-            Showcase your agricultural products or make your farm equipment
-            available for hire.
+            Create a marketplace listing for your agricultural products, equipment, services, skills or expertise.
           </p>
         </header>
 
@@ -316,37 +489,25 @@ export default function CreateListingPage() {
             </h2>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setType("product")}
-                className={`rounded-xl border-2 p-5 text-left transition ${
-                  type === "product"
-                    ? "border-[#17472D] bg-[#F0F5ED]"
-                    : "border-[#E5E9E0] hover:border-[#9BAC96]"
-                }`}
-              >
-                <Package size={25} className="text-[#17472D]" />
-                <span className="mt-3 block font-bold">Products for sale</span>
-                <span className="mt-1 block text-xs leading-5 text-[#758071]">
-                  Crops, vegetables, fruits, livestock and other farm produce.
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setType("hire")}
-                className={`rounded-xl border-2 p-5 text-left transition ${
-                  type === "hire"
-                    ? "border-[#17472D] bg-[#F0F5ED]"
-                    : "border-[#E5E9E0] hover:border-[#9BAC96]"
-                }`}
-              >
-                <Tractor size={25} className="text-[#17472D]" />
-                <span className="mt-3 block font-bold">Equipment for hire</span>
-                <span className="mt-1 block text-xs leading-5 text-[#758071]">
-                  Tractors, harvesters, irrigation equipment and machinery.
-                </span>
-              </button>
+              {listingOptions
+                .filter((option) => permittedTypes.includes(option.type))
+                .map((option) => (
+                  <button
+                    key={option.type}
+                    type="button"
+                    onClick={() => { setType(option.type); setPriceUnit(priceUnitsByType[option.type][0]); }}
+                    className={`rounded-xl border-2 p-5 text-left transition ${
+                      type === option.type
+                        ? "border-[#17472D] bg-[#F0F5ED]"
+                        : "border-[#E5E9E0] hover:border-[#9BAC96]"
+                    }`}
+                  >
+                    <span className="block font-bold">{option.title}</span>
+                    <span className="mt-2 block text-xs leading-5 text-[#758071]">
+                      {option.description}
+                    </span>
+                  </button>
+                ))}
             </div>
           </section>
 
@@ -358,11 +519,7 @@ export default function CreateListingPage() {
                 maxLength={120}
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder={
-                  type === "product"
-                    ? "e.g. Fresh maize for sale"
-                    : "e.g. Tractor available for hire"
-                }
+                placeholder={listingPlaceholders[type].title}
                 className={inputClass}
               />
             </label>
@@ -374,11 +531,7 @@ export default function CreateListingPage() {
                 maxLength={80}
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
-                placeholder={
-                  type === "product"
-                    ? "e.g. Grains, Vegetables, Livestock"
-                    : "e.g. Tractors, Harvesters, Irrigation"
-                }
+                placeholder={listingPlaceholders[type].category}
                 className={inputClass}
               />
             </label>
@@ -395,13 +548,44 @@ export default function CreateListingPage() {
             </label>
 
             <label className="text-sm font-semibold">
-              Location *
+              Region *
+              <select
+                required
+                value={region}
+                onChange={(event) => setRegion(event.target.value)}
+                className={inputClass}
+              >
+                <option value="">Select your region</option>
+                {[
+                  "Ahafo", "Ashanti", "Bono", "Bono East",
+                  "Central", "Eastern", "Greater Accra", "North East",
+                  "Northern", "Oti", "Savannah", "Upper East",
+                  "Upper West", "Volta", "Western", "Western North",
+                ].map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-semibold">
+              District / Municipality
+              <input
+                maxLength={100}
+                value={district}
+                onChange={(event) => setDistrict(event.target.value)}
+                placeholder="Enter your district (optional)"
+                className={inputClass}
+              />
+            </label>
+
+            <label className="text-sm font-semibold">
+              Town / Community *
               <input
                 required
-                maxLength={120}
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                placeholder="e.g. Kwabenya, Accra"
+                maxLength={100}
+                value={town}
+                onChange={(event) => setTown(event.target.value)}
+                placeholder="e.g. Kwabenya"
                 className={inputClass}
               />
             </label>
@@ -429,28 +613,7 @@ export default function CreateListingPage() {
                 onChange={(event) => setPriceUnit(event.target.value)}
                 className={inputClass}
               >
-                {(
-                  type === "product"
-                    ? [
-                        "per unit",
-                        "per kg",
-                        "per bag",
-                        "per crate",
-                        "per basket",
-                        "per tonne",
-                        "per animal",
-                        "negotiable",
-                      ]
-                    : [
-                        "per hour",
-                        "per day",
-                        "per week",
-                        "per month",
-                        "per acre",
-                        "per project",
-                        "negotiable",
-                      ]
-                ).map((unit) => (
+                {priceUnitsByType[type].map((unit) => (
                   <option key={unit} value={unit}>
                     {unit}
                   </option>
@@ -468,27 +631,8 @@ export default function CreateListingPage() {
                 rows={5}
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Describe your product or equipment. Include quality, quantity, condition and other important details."
+                placeholder={listingPlaceholders[type].description}
                 className={inputClass}
-              />
-            </label>
-          </section>
-
-          <section>
-            <label className="text-sm font-semibold">
-              Agricultural specifications
-              <span className="mt-1 block text-xs font-normal text-[#879084]">
-                Optional technical details in JSON format.
-              </span>
-              <textarea
-                rows={5}
-                spellCheck={false}
-                value={specificationsText}
-                onChange={(event) =>
-                  setSpecificationsText(event.target.value)
-                }
-                placeholder={'{\n  "quantity": "100 kg",\n  "quality": "Grade A"\n}'}
-                className={`${inputClass} font-mono`}
               />
             </label>
           </section>
@@ -498,7 +642,7 @@ export default function CreateListingPage() {
               <div>
                 <h2 className="flex items-center gap-2 font-bold text-[#17472D]">
                   <ImagePlus size={20} />
-                  Product photos and videos *
+                  Listing photos and videos *
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-[#758071]">
                   Upload up to 8 files, including a maximum of 2 videos.
@@ -626,3 +770,6 @@ export default function CreateListingPage() {
     </main>
   );
 }
+
+
+

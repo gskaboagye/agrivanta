@@ -1,4 +1,4 @@
-﻿
+
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getCurrentUser } from "@/lib/auth";
@@ -177,6 +177,9 @@ export async function GET(
         priceUnit:
           listing.priceUnit ?? listing.unit ?? "Price to be confirmed",
         location: listing.location ?? "",
+        region: listing.region ?? "",
+        district: listing.district ?? "",
+        town: listing.town ?? "",
         seller: listing.seller ?? "Seller not specified",
         sellerProfileId,
         image: listing.image ?? "",

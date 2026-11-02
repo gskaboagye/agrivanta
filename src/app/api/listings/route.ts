@@ -39,8 +39,13 @@ const rolePermissions: Record<string, readonly ListingType[]> = {
   worker: ["worker"],
 
   expert: ["expert", "service"],
-
 };
+const ghanaRegions = [
+  "Ahafo", "Ashanti", "Bono", "Bono East",
+  "Central", "Eastern", "Greater Accra", "North East",
+  "Northern", "Oti", "Savannah", "Upper East",
+  "Upper West", "Volta", "Western", "Western North",
+] as const;
 
 
 
@@ -56,7 +61,7 @@ const fieldLimits: Record<string, number> = {
 
   priceUnit: 40,
 
-  location: 120,
+  location: 250,
 
   image: 2000,
 
@@ -490,6 +495,9 @@ export async function GET(request: NextRequest) {
         price: document.price,
         priceUnit: document.priceUnit ?? document.unit ?? "Price to be confirmed",
         location: document.location,
+        region: document.region ?? "",
+        district: document.district ?? "",
+        town: document.town ?? "",
         seller: document.seller ?? "Seller not specified",
         sellerProfileId: getSellerProfileId(document),
         image: document.image ?? "",
@@ -633,12 +641,38 @@ export async function POST(request: NextRequest) {
 
       priceUnit: fieldLimits.priceUnit,
 
-      location: fieldLimits.location,
+
 
     };
 
 
 
+    const region = data.region;
+    const district = data.district ?? "";
+    const town = data.town;
+
+    if (
+      typeof region !== "string" ||
+      !(ghanaRegions as readonly string[]).includes(region) ||
+      !validText(town, 100) ||
+      typeof district !== "string" ||
+      (district.trim().length > 100)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please provide a valid Ghana region and town. District is optional.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const combinedLocation = [
+      town.trim(),
+      district.trim(),
+      region,
+      "Ghana",
+    ].filter(Boolean).join(", ");
     const requiredFieldsValid = Object.entries(
 
       requiredLimits
@@ -1021,17 +1055,7 @@ export async function POST(request: NextRequest) {
 
           : "",
 
-      specifications:
 
-        data.specifications &&
-
-        typeof data.specifications === "object" &&
-
-        !Array.isArray(data.specifications)
-
-          ? data.specifications
-
-          : {},
 
       description: (data.description as string).trim(),
 
@@ -1039,7 +1063,10 @@ export async function POST(request: NextRequest) {
 
       priceUnit: (data.priceUnit as string).trim(),
 
-      location: (data.location as string).trim(),
+      location: combinedLocation,
+      region,
+      district: district.trim(),
+      town: town.trim(),
 
 
 
