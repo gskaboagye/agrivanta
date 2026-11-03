@@ -1,9 +1,10 @@
-﻿
+
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import GlobalAccountNav from "@/components/global-account-nav";
+import AssistPanel from "@/components/assist/AssistPanel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <GlobalAccountNav />
         </Suspense>
+
+        <AssistPanel />
 
         {children}
       </body>
