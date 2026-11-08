@@ -12,7 +12,6 @@ import {
 
 import { emailSchema } from "@/lib/validation";
 
-
 export async function POST(request: Request) {
   try {
     // Parse and validate request body.
@@ -106,6 +105,18 @@ export async function POST(request: Request) {
           message: "Invalid email or password.",
         },
         { status: 401 }
+      );
+    }
+
+    // Prevent disabled accounts from creating new sessions.
+    if (user.status === "disabled") {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "This account has been disabled. Please contact support.",
+        },
+        { status: 403 }
       );
     }
 

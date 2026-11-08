@@ -10,8 +10,16 @@
     "seed:listings": "tsx --env-file=.env.local scripts/seed-listings.ts"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.33.0",
+    "@tiptap/extension-link": "^3.33.0",
+    "@tiptap/extension-placeholder": "^3.33.0",
+    "@tiptap/extension-underline": "^3.33.0",
+    "@tiptap/pm": "^3.33.0",
+    "@tiptap/react": "^3.33.0",
+    "@tiptap/starter-kit": "^3.33.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
+    "isomorphic-dompurify": "^3.19.0",
     "jose": "^6.2.13",
     "libphonenumber-js": "^1.13.15",
     "lucide-react": "^1.64.0",

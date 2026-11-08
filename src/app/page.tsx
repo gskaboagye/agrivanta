@@ -1,4 +1,6 @@
-﻿import {
+import NewsPreview from "@/components/home/news-preview";
+
+import {
   ArrowRight,
   Search,
   Sprout,
@@ -122,7 +124,7 @@ export default function Home() {
               Agriculture works better when we <span className="text-[#E6BD57]">connect.</span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
-              Discover farm produce and supplies, find equipment and services, and access practical farming information—all in one place.
+              Discover farm produce and supplies, find equipment and services, and access practical farming informationÃ¢â‚¬â€all in one place.
             </p>
 
             <form action="/products" className="mt-8 flex max-w-xl flex-col gap-2 rounded-xl bg-white p-2 shadow-xl sm:flex-row">
@@ -261,9 +263,20 @@ export default function Home() {
                   <p className="mt-2 text-sm leading-6 text-[#647367]">
                     Explore agricultural learning topics such as crop production, soil health, livestock care and farm business. Get practical information to support better decisions across your farming activities.
                   </p>
-                  <a href="/agriguide" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]">
-                    Open AgriGuide <ArrowRight size={16} />
-                  </a>
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+  <a
+    href="/agriguide"
+    className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]"
+  >
+    Open AgriGuide <ArrowRight size={16} />
+  </a>
+  <a
+    href="/register?redirect=%2Fagriguide"
+    className="inline-flex items-center gap-2 rounded-lg border border-[#17472D] px-5 py-3 text-sm font-bold text-[#17472D] transition hover:bg-[#F1F2E8]"
+  >
+    Create an account
+  </a>
+</div>
                   <p className="mt-3 text-xs leading-5 text-[#718071]">
                     AI-powered answers require an active AI service connection. Advice should be checked against trusted local guidance.
                   </p>
@@ -312,6 +325,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Agricultural News */}
+      <NewsPreview />
 
       {/* Safety */}
       <section id="safe-trading" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 sm:py-16">
@@ -394,7 +410,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-white/15 pt-5 text-xs text-white/60 md:col-span-2">
-            © 2026 AgriVanta. Powering Every Link in Agriculture.
+            Ã‚Â© 2026 AgriVanta. Powering Every Link in Agriculture.
           </div>
         </div>
       </footer>

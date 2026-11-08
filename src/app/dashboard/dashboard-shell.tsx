@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import {
@@ -14,6 +14,7 @@ import {
   CircleHelp,
   Compass,
   LayoutDashboard,
+  History,
   Leaf,
   Menu,
   Package,
@@ -28,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { RECENT_PAGES_KEY, type RecentPage } from "@/components/recent-page-tracker";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -232,10 +234,12 @@ function Sidebar({
   user,
   mobileOpen,
   onClose,
+  recentPages,
 }: {
   user: DashboardUser;
   mobileOpen: boolean;
   onClose: () => void;
+  recentPages: RecentPage[];
 }) {
   const pathname = usePathname();
 
@@ -337,6 +341,51 @@ function Sidebar({
           </nav>
         </div>
 
+        <div className="mt-7 px-4">
+          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa294]">
+            Recent Pages
+          </p>
+
+          <nav aria-label="Recent pages" className="space-y-1">
+            {recentPages.length > 0 ? (
+              recentPages.map((page) => {
+                const RecentIcon =
+                  page.path === "/agriguide" ? BookOpen :
+                  page.path === "/weather" ? CloudSun :
+                  page.path.startsWith("/products") ? ShoppingBag :
+                  page.path.startsWith("/news") ? BookOpen :
+                  page.path.startsWith("/dashboard") ? LayoutDashboard :
+                  History;
+
+                const active = pathname === page.path;
+
+                return (
+                  <Link
+                    key={page.path}
+                    href={page.path}
+                    onClick={onClose}
+                    title={page.title}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium transition ${
+                      active
+                        ? "bg-[#EAF0E6] text-[#17472D]"
+                        : "text-[#778071] hover:bg-[#f5f7f2] hover:text-[#17472D]"
+                    }`}
+                  >
+                    <RecentIcon size={16} className="shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {page.title}
+                    </span>
+                  </Link>
+                );
+              })
+            ) : (
+              <p className="px-3 py-2 text-[11px] leading-5 text-[#9aa294]">
+                Pages you visit will appear here.
+              </p>
+            )}
+          </nav>
+        </div>
+
         <div className="mt-8 px-4">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa294]">
             Your account
@@ -405,6 +454,39 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [recentPages, setRecentPages] = useState<RecentPage[]>([]);
+
+  useEffect(() => {
+    function loadRecentPages() {
+      try {
+        const stored = localStorage.getItem(RECENT_PAGES_KEY);
+        const parsed: unknown = stored ? JSON.parse(stored) : [];
+
+        if (Array.isArray(parsed)) {
+          setRecentPages(
+            parsed.filter(
+              (page): page is RecentPage =>
+                page &&
+                typeof page.path === "string" &&
+                typeof page.title === "string" &&
+                typeof page.visitedAt === "number"
+            ).slice(0, 6)
+          );
+        }
+      } catch (error) {
+        console.error("Unable to load recent pages:", error);
+      }
+    }
+
+    loadRecentPages();
+    window.addEventListener("storage", loadRecentPages);
+    window.addEventListener("agrivanta:recent-pages-updated", loadRecentPages);
+
+    return () => {
+      window.removeEventListener("storage", loadRecentPages);
+      window.removeEventListener("agrivanta:recent-pages-updated", loadRecentPages);
+    };
+  }, []);
 
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -525,6 +607,7 @@ export default function DashboardShell({
         user={user}
         mobileOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
+        recentPages={recentPages}
       />
 
       <div className="min-h-screen lg:pl-[260px]">

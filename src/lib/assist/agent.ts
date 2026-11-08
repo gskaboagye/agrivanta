@@ -77,7 +77,8 @@ const MAX_INPUT_MESSAGES = 20;
 const MAX_OUTPUT_TOKENS = 1200;
 
 export async function generateAssistResponse(
-  messages: AssistMessage[]
+  messages: AssistMessage[],
+  platformContext: string
 ): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OpenAI API key is not configured.");
@@ -102,7 +103,7 @@ export async function generateAssistResponse(
 
   const response = await client.responses.create({
     model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-    instructions: ASSIST_INSTRUCTIONS,
+    instructions: `${ASSIST_INSTRUCTIONS}\n\n${platformContext}`,
     input: validMessages.map((message) => ({
       role: message.role,
       content: message.content,

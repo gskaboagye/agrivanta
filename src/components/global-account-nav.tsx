@@ -1,4 +1,3 @@
-﻿
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,6 +11,13 @@ import {
   Sprout,
   UserRound,
   UserCircle,
+  Menu,
+  X,
+  CloudSun,
+  Store,
+  MessageCircle,
+  FolderOpen,
+  BookOpen,
 } from "lucide-react";
 
 type AccountRole = "farmer" | "buyer" | "supplier" | "worker" | "expert";
@@ -31,6 +37,14 @@ const roleLabels: Record<AccountRole, string> = {
   expert: "Agricultural Expert",
 };
 
+const navigationLinks = [
+  { label: "Marketplace", href: "/products", icon: Store },
+  { label: "Categories", href: "/#categories", icon: FolderOpen },
+  { label: "AgriGuide", href: "/agriguide", icon: MessageCircle },
+  { label: "Weather", href: "/weather", icon: CloudSun },
+  { label: "How it works", href: "/#how-it-works", icon: BookOpen },
+];
+
 export default function GlobalAccountNav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -38,6 +52,7 @@ export default function GlobalAccountNav() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
 
@@ -89,6 +104,7 @@ export default function GlobalAccountNav() {
     }
 
     setMenuOpen(false);
+    setMobileMenuOpen(false);
     void loadAccount();
 
     return () => controller.abort();
@@ -112,6 +128,7 @@ export default function GlobalAccountNav() {
 
       setUser(null);
       setMenuOpen(false);
+      setMobileMenuOpen(false);
 
       router.replace("/login");
       router.refresh();
@@ -126,9 +143,14 @@ export default function GlobalAccountNav() {
     return null;
   }
 
+  const linkClass =
+    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-[#526252] transition hover:bg-[#EAF0E6] hover:text-[#17472D] lg:rounded-lg lg:px-2 lg:py-2";
+
   return (
     <header className="relative z-50 border-b border-[#E4E9E1] bg-white">
-      <div className="mx-auto flex min-h-[68px] max-w-7xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[68px] max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+
+        {/* Brand */}
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2.5"
@@ -143,33 +165,36 @@ export default function GlobalAccountNav() {
           </span>
         </Link>
 
+        {/* Desktop navigation */}
         <nav
           aria-label="Main navigation"
-          className="order-3 flex w-full flex-wrap items-center justify-center gap-x-5 gap-y-2 pb-3 text-sm font-semibold text-[#526252] lg:order-2 lg:w-auto lg:pb-0"
+          className="hidden items-center gap-2 xl:flex"
         >
-          <Link href="/products" className="transition hover:text-[#17472D]">
-            Marketplace
-          </Link>
+          {navigationLinks.map((item) => {
+            const Icon = item.icon;
 
-          <Link href="/#categories" className="transition hover:text-[#17472D]">
-            Categories
-          </Link>
-
-          {user && (user.role === "farmer" || user.role === "supplier") && (
-            <Link href="/agriguide" className="transition hover:text-[#17472D]">
-              AgriGuide
-            </Link>
-          )}
-
-          <Link href="/#how-it-works" className="transition hover:text-[#17472D]">
-            How it works
-          </Link>
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  pathname === item.href
+                    ? "bg-[#EAF0E6] text-[#17472D]"
+                    : "text-[#526252] hover:bg-[#F1F4ED] hover:text-[#17472D]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="order-2 flex items-center gap-3 lg:order-3">
+        {/* Account controls */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+
           {loading ? (
             <div
-              className="h-10 w-28 animate-pulse rounded-xl bg-[#F0F3ED]"
+              className="h-10 w-20 animate-pulse rounded-xl bg-[#F0F3ED] sm:w-28"
               aria-label="Loading account"
             />
           ) : user ? (
@@ -179,7 +204,7 @@ export default function GlobalAccountNav() {
                 onClick={() => setMenuOpen((open) => !open)}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
-                className="flex items-center gap-2 rounded-xl border border-[#E3E9E0] bg-white px-2.5 py-2 transition hover:bg-[#F7F9F5] sm:gap-3 sm:px-3"
+                className="flex items-center gap-2 rounded-xl border border-[#E3E9E0] bg-white px-2 py-2 transition hover:bg-[#F7F9F5] sm:gap-3 sm:px-3"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EAF0E6] text-[#17472D]">
                   <UserRound size={19} />
@@ -274,7 +299,7 @@ export default function GlobalAccountNav() {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 sm:flex">
               <Link
                 href="/login"
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#17472D] transition hover:bg-[#F1F4ED]"
@@ -291,8 +316,70 @@ export default function GlobalAccountNav() {
               </Link>
             </div>
           )}
+
+          {/* Mobile menu button */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-navigation"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E3E9E0] text-[#17472D] transition hover:bg-[#F1F4ED] xl:hidden"
+          >
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile and tablet navigation */}
+      {mobileMenuOpen && (
+        <div
+          id="mobile-navigation"
+          className="border-t border-[#E4E9E1] bg-white px-4 pb-5 pt-3 shadow-lg xl:hidden sm:px-6"
+        >
+          <nav
+            aria-label="Mobile navigation"
+            className="mx-auto flex max-w-7xl flex-col gap-1"
+          >
+            {navigationLinks.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={linkClass}
+                >
+                  <Icon size={19} className="shrink-0 text-[#17472D]" />
+                  {item.label}
+                </Link>
+              );
+            })}
+
+            {!user && !loading && (
+              <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[#EDF0E9] pt-4 sm:hidden">
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-[#17472D] px-3 py-3 text-sm font-bold text-[#17472D]"
+                >
+                  <LogIn size={17} />
+                  Log in
+                </Link>
+
+                <Link
+                  href="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center rounded-xl bg-[#17472D] px-3 py-3 text-sm font-bold text-white"
+                >
+                  Register
+                </Link>
+              </div>
+            )}
+          </nav>
+        </div>
+      )}
 
       {error && (
         <p
@@ -305,5 +392,3 @@ export default function GlobalAccountNav() {
     </header>
   );
 }
-
-

@@ -144,6 +144,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           email: 1,
           phone: 1,
           role: 1,
+          status: 1,
         },
       }
     );
@@ -153,6 +154,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       typeof user.role !== "string" ||
       !ACCOUNT_ROLES.includes(user.role as AccountRole)
     ) {
+      return null;
+    }
+
+    // Reject disabled accounts, including users with existing sessions.
+    if (user.status === "disabled") {
       return null;
     }
 

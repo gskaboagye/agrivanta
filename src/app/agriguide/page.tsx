@@ -8,7 +8,7 @@ export default async function AgriGuidePage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login");
+    redirect("/login?redirect=%2Fagriguide");
   }
 
   if (user.role !== "farmer" && user.role !== "supplier") {

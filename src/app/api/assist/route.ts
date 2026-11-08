@@ -6,6 +6,7 @@ import {
   getConversation,
 } from "@/lib/assist/conversations";
 import { generateAssistResponse } from "@/lib/assist/agent";
+import { getPlatformKnowledge } from "@/lib/assist/platform-knowledge";
 
 const MAX_MESSAGE_LENGTH = 10000;
 
@@ -88,7 +89,12 @@ export async function POST(request: NextRequest) {
     let answer: string;
 
     try {
-      answer = await generateAssistResponse(conversation.messages);
+      answer = await generateAssistResponse(
+        conversation.messages,
+        getPlatformKnowledge(
+          identity.type === "user" ? identity.user.role : null
+        )
+      );
     } catch (error) {
       console.error("Assist AI generation error:", error);
 
