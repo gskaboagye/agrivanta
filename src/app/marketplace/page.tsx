@@ -50,6 +50,7 @@ type Listing = {
   priceUnit: string;
   location: string;
   seller: string;
+  sellerRole: string;
   image: string;
   media: MediaItem[];
   mediaCount: number;
@@ -236,7 +237,7 @@ function GalleryModal({
             {listing.location}
           </p>
           <p className="font-bold text-[#E7B958]">
-            GH₵ {listing.price.toLocaleString("en-GH")}
+            GHâ‚µ {listing.price.toLocaleString("en-GH")}
           </p>
         </div>
       </div>
@@ -388,6 +389,7 @@ function ProductsBrowser() {
               seller: String(
                 item.seller ?? "Seller not specified"
               ),
+              sellerRole: String(item.sellerRole ?? "member"),
               image:
                 uploadedMedia.find((asset) => asset.type === "image")?.url ??
                 fallbackImages[listingType],
@@ -563,7 +565,7 @@ function ProductsBrowser() {
   return (
     <main className="min-h-screen bg-[#F8F6EE] text-[#193D2A]">
       <div className="bg-[#17472D] px-4 py-2 text-center text-xs font-medium text-white sm:text-sm">
-        AgriVanta Marketplace — Products, Workers and Agricultural Experts
+        AgriVanta Marketplace â€” Products, Workers and Agricultural Experts
       </div>
 
       <header className="border-b border-[#E7E4D9] bg-white">
@@ -777,7 +779,7 @@ function ProductsBrowser() {
             </label>
 
             <label className="text-sm font-semibold">
-              Maximum rate or price (GH₵)
+              Maximum rate or price (GHâ‚µ)
               <input
                 type="number"
                 min="0"
@@ -952,7 +954,7 @@ function ProductsBrowser() {
 
                       <div className="mt-4 border-t border-[#E7E4D9] pt-4">
                         <p className="text-xl font-extrabold text-[#17472D]">
-                          GH₵ {listing.price.toLocaleString("en-GH")}
+                          GHâ‚µ {listing.price.toLocaleString("en-GH")}
                         </p>
                         <p className="mt-1 text-xs text-[#718071]">
                           {listing.priceUnit}
@@ -964,10 +966,16 @@ function ProductsBrowser() {
                         {listing.location}
                       </p>
 
-                      <p className="mt-3 flex items-center gap-2 text-sm text-[#647367]">
-                        <UserRound size={16} className="shrink-0" />
-                        {listing.seller}
-                      </p>
+                      <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#E7E4D9] bg-[#FAFAF6] p-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF0E6] text-[#17472D]">
+                          <UserRound size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-[#879084]">Listed by</p>
+                          <p className="mt-0.5 truncate text-sm font-bold text-[#17472D]">{listing.seller}</p>
+                          <p className="mt-0.5 text-xs capitalize text-[#718071]">{listing.sellerRole.replace(/[-_]/g, " ")}</p>
+                        </div>
+                      </div>
 
                       <div className="mt-4 flex items-start gap-2 rounded-lg bg-[#FCF6E6] p-3">
                         <Info

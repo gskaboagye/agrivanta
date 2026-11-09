@@ -18,6 +18,9 @@ import {
   MessageCircle,
   FolderOpen,
   BookOpen,
+  Newspaper,
+  MessageSquareText,
+  Info,
 } from "lucide-react";
 
 type AccountRole = "farmer" | "buyer" | "supplier" | "worker" | "expert";
@@ -37,6 +40,12 @@ const roleLabels: Record<AccountRole, string> = {
   expert: "Agricultural Expert",
 };
 
+const moreLinks = [
+  { label: "News", href: "/news", icon: Newspaper },
+  { label: "Reports", href: "/reports", icon: BookOpen },
+  { label: "Feedback", href: "/feedback", icon: MessageSquareText },
+  { label: "About Us", href: "/about", icon: Info },
+];
 const navigationLinks = [
   { label: "Marketplace", href: "/products", icon: Store },
   { label: "Categories", href: "/#categories", icon: FolderOpen },
@@ -52,6 +61,8 @@ export default function GlobalAccountNav() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
@@ -187,6 +198,50 @@ export default function GlobalAccountNav() {
               </Link>
             );
           })}
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              aria-expanded={moreOpen}
+              aria-haspopup="menu"
+              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-[#526252] transition hover:bg-[#F1F4ED] hover:text-[#17472D]"
+            >
+              More
+              <ChevronDown size={15} className={moreOpen ? "rotate-180 transition" : "transition"} />
+            </button>
+
+            {moreOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close More menu"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setMoreOpen(false)}
+                />
+                <div
+                  role="menu"
+                  className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-[#E4E9E1] bg-white p-2 shadow-xl"
+                >
+                  {moreLinks.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        role="menuitem"
+                        onClick={() => setMoreOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold text-[#526252] transition hover:bg-[#EAF0E6] hover:text-[#17472D]"
+                      >
+                        <Icon size={18} className="text-[#17472D]" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </nav>
 
         {/* Account controls */}
@@ -356,6 +411,46 @@ export default function GlobalAccountNav() {
                 </Link>
               );
             })}
+
+            <div className="mt-1 border-t border-[#EDF0E9] pt-2">
+              <button
+                type="button"
+                onClick={() => setMobileMoreOpen((open) => !open)}
+                aria-expanded={mobileMoreOpen}
+                className={linkClass + " w-full justify-between"}
+              >
+                <span className="flex items-center gap-3">
+                  <FolderOpen size={19} className="shrink-0 text-[#17472D]" />
+                  More
+                </span>
+                <ChevronDown
+                  size={17}
+                  className={mobileMoreOpen ? "rotate-180 transition" : "transition"}
+                />
+              </button>
+
+              {mobileMoreOpen && (
+                <div className="ml-4 border-l-2 border-[#E4E9E1] pl-3">
+                  {moreLinks.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          setMobileMoreOpen(false);
+                        }}
+                        className={linkClass}
+                      >
+                        <Icon size={19} className="shrink-0 text-[#17472D]" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {!user && !loading && (
               <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[#EDF0E9] pt-4 sm:hidden">

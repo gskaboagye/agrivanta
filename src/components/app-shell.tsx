@@ -10,6 +10,8 @@ function AppShellContent() {
   const pathname = usePathname();
 
   const isAdminRoute = pathname.startsWith("/admin");
+  const isDashboardRoute =
+    pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 
   if (isAdminRoute) {
     return null;
@@ -18,7 +20,7 @@ function AppShellContent() {
   return (
     <>
       <RecentPageTracker />
-      <GlobalAccountNav />
+      {!isDashboardRoute && <GlobalAccountNav />}
       <AssistPanel />
     </>
   );

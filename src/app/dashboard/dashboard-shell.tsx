@@ -3,6 +3,7 @@
 
 import {
   Activity,
+  Flag,
   ArrowRight,
   ArrowUpRight,
   Bell,
@@ -121,6 +122,7 @@ const navigation = [
   { label: "My Listings", href: "/dashboard/my-listings", icon: Package },
   { label: "Inquiries", href: "/dashboard/inquiries", icon: MessageSquare },
   { label: "Messages", href: "/dashboard/messages", icon: MessageCircle },
+  { label: "My Reports", href: "/dashboard/reports", icon: Flag },
   {
     label: "AgriGuide",
     href: "/agriguide",

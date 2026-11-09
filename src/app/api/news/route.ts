@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 import { sanitizeArticleHtml } from "@/lib/sanitize-html";
 
@@ -63,6 +63,7 @@ function serializeArticle(article: Record<string, unknown>, includeContent = fal
 }
 
 export async function GET(request: Request) {
+  await connection();
   try {
     const params = new URL(request.url).searchParams;
 

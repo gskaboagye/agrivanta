@@ -1,4 +1,4 @@
-﻿
+
 
 import { NextRequest, NextResponse } from "next/server";
 
@@ -499,6 +499,8 @@ export async function GET(request: NextRequest) {
           },
           {
             projection: {
+              name: 1,
+              role: 1,
               phone: 1,
               phonePublic: 1,
               whatsappEnabled: 1,
@@ -520,6 +522,12 @@ export async function GET(request: NextRequest) {
         return [
           seller._id.toString(),
           {
+            name:
+              typeof seller.name === "string" && seller.name.trim()
+                ? seller.name.trim()
+                : "AgriVanta Seller",
+            role:
+              typeof seller.role === "string" ? seller.role : "member",
             phone,
             whatsappEnabled:
               Boolean(phone) && seller.whatsappEnabled !== false,
@@ -553,7 +561,12 @@ export async function GET(request: NextRequest) {
         region: document.region ?? "",
         district: document.district ?? "",
         town: document.town ?? "",
-        seller: document.seller ?? "Seller not specified",
+        seller:
+          sellerContacts.get(getSellerProfileId(document) ?? "")?.name ??
+          document.seller ??
+          "Seller not specified",
+        sellerRole:
+          sellerContacts.get(getSellerProfileId(document) ?? "")?.role ?? "member",
         sellerProfileId: getSellerProfileId(document),
         sellerPhone:
           sellerContacts.get(getSellerProfileId(document) ?? "")?.phone ?? "",
