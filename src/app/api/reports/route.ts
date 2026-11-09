@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 
 const PAGE_SIZE = 12;
@@ -19,6 +20,8 @@ function escapeRegex(value: string) {
 }
 
 export async function GET(request: NextRequest) {
+  await connection();
+
   try {
     const params = request.nextUrl.searchParams;
     const search = params.get("search")?.trim() ?? "";
