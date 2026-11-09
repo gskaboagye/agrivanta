@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -90,7 +90,7 @@ function formatStatus(status: string) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-export default function AdminUserReportDetailsPage() {
+function AdminUserReportDetailsContent() {
   const params = useParams<{ id: string }>();
   const reportId = params.id;
 
@@ -646,5 +646,21 @@ export default function AdminUserReportDetailsPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function AdminUserReportDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#F8F6EE] p-6">
+          <div className="mx-auto max-w-5xl rounded-2xl border border-[#E7E4D9] bg-white p-8 text-center text-sm text-[#647367]">
+            Loading report details...
+          </div>
+        </main>
+      }
+    >
+      <AdminUserReportDetailsContent />
+    </Suspense>
   );
 }
