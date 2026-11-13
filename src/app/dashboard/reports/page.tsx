@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Flag,
   LoaderCircle,
+  MessageSquare,
   Plus,
   RefreshCw,
   Search,
@@ -19,6 +20,13 @@ import {
 } from "lucide-react";
 
 type ReportStatus = "pending" | "investigating" | "resolved" | "dismissed";
+
+type AdminResponse = {
+  responseId: string;
+  message: string;
+  adminName: string;
+  createdAt: string;
+};
 
 type Report = {
   reportId: string;
@@ -36,6 +44,7 @@ type Report = {
   createdAt: string;
   updatedAt?: string;
   resolvedAt?: string | null;
+  adminResponses?: AdminResponse[];
 };
 
 type UserSearchResult = {
@@ -708,6 +717,53 @@ export default function MyReportsPage() {
                             </p>
                           )}
                         </div>
+                      </div>
+
+                      <div className="mt-5 border-t border-[#EDF0E9] pt-5">
+                        <div className="mb-3 flex items-center gap-2">
+                          <MessageSquare size={17} className="text-[#17472D]" />
+                          <h4 className="text-sm font-bold text-[#193D2A]">
+                            Administrator responses
+                          </h4>
+                          {report.adminResponses?.length ? (
+                            <span className="rounded-full bg-[#EAF2E9] px-2 py-0.5 text-[10px] font-bold text-[#17472D]">
+                              {report.adminResponses.length}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {report.adminResponses?.length ? (
+                          <div className="space-y-3">
+                            {[...report.adminResponses]
+                              .sort(
+                                (a, b) =>
+                                  new Date(a.createdAt).getTime() -
+                                  new Date(b.createdAt).getTime()
+                              )
+                              .map((response) => (
+                                <div
+                                  key={response.responseId}
+                                  className="rounded-xl border border-[#DCE8DA] bg-[#F5F9F3] p-4"
+                                >
+                                  <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                                    <p className="text-xs font-bold text-[#17472D]">
+                                      {response.adminName || "AgriVanta Administrator"}
+                                    </p>
+                                    <span className="text-[10px] text-[#879084]">
+                                      {formatDate(response.createdAt)}
+                                    </span>
+                                  </div>
+                                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#536453]">
+                                    {response.message}
+                                  </p>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <p className="rounded-xl bg-[#FCFCF9] p-4 text-xs leading-6 text-[#879084]">
+                            No official response yet. Our team will review your report and respond here when an update is available.
+                          </p>
+                        )}
                       </div>
                     </article>
                   ))}

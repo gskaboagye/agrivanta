@@ -23,13 +23,18 @@ if (process.env.NODE_ENV === "development") {
     client = new MongoClient(uri, options);
     global._mongoClientPromise = client.connect();
   }
+
   clientPromise = global._mongoClientPromise;
 } else {
   client = new MongoClient(uri, options);
   clientPromise = client.connect();
 }
 
+export async function getMongoClient(): Promise<MongoClient> {
+  return clientPromise;
+}
+
 export async function getDatabase() {
-  const connectedClient = await clientPromise;
+  const connectedClient = await getMongoClient();
   return connectedClient.db(dbName);
 }

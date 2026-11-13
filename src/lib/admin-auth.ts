@@ -1,10 +1,17 @@
-﻿import "server-only";
+﻿
+import "server-only";
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
+import {
+  type AdminPermission,
+  type AdminRole,
+  hasPermission,
+  isAdminRole,
+} from "@/lib/admin-permissions";
 
 const ADMIN_COOKIE_NAME = "agrivanta_admin_session";
 const ADMIN_SESSION_DURATION = 60 * 60 * 8;
@@ -14,6 +21,7 @@ export type AdminUser = {
   name: string;
   email: string;
   status: "active" | "disabled";
+  role: AdminRole | null;
   createdAt?: Date;
 };
 
@@ -23,6 +31,7 @@ type AdminDocument = {
   email: string;
   passwordHash: string;
   status: "active" | "disabled";
+  role?: unknown;
   createdAt?: Date;
 };
 
@@ -145,6 +154,7 @@ export async function getCurrentAdmin(): Promise<AdminUser | null> {
       name: admin.name,
       email: admin.email,
       status: admin.status,
+      role: isAdminRole(admin.role) ? admin.role : null,
       createdAt: admin.createdAt,
     };
   } catch (error) {
@@ -158,6 +168,18 @@ export async function requireAdmin(): Promise<AdminUser> {
 
   if (!admin) {
     throw new Error("ADMIN_UNAUTHORIZED");
+  }
+
+  return admin;
+}
+
+export async function requireAdminPermission(
+  permission: AdminPermission
+): Promise<AdminUser> {
+  const admin = await requireAdmin();
+
+  if (!admin.role || !hasPermission(admin.role, permission)) {
+    throw new Error("ADMIN_FORBIDDEN");
   }
 
   return admin;

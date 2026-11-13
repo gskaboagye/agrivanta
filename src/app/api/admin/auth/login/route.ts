@@ -6,8 +6,7 @@ import {
   verifyAdminPassword,
   type AdminUser,
 } from "@/lib/admin-auth";
-
-
+import { isAdminRole } from "@/lib/admin-permissions";
 
 type AdminDocument = {
   _id: import("mongodb").ObjectId;
@@ -15,6 +14,7 @@ type AdminDocument = {
   email: string;
   passwordHash: string;
   status: "active" | "disabled";
+  role?: unknown;
   createdAt?: Date;
 };
 
@@ -91,6 +91,9 @@ export async function POST(request: Request) {
       name: administrator.name,
       email: administrator.email,
       status: administrator.status,
+      role: isAdminRole(administrator.role)
+        ? administrator.role
+        : null,
       createdAt: administrator.createdAt,
     };
 
@@ -105,6 +108,7 @@ export async function POST(request: Request) {
           name: admin.name,
           email: admin.email,
           status: admin.status,
+          role: admin.role,
         },
       },
       { status: 200 }

@@ -243,6 +243,7 @@ export async function POST(request: NextRequest) {
       status: "pending",
       priority: "medium",
       adminNotes: [],
+      adminResponses: [],
       resolution: null,
       createdAt: now,
       updatedAt: now,
@@ -314,6 +315,7 @@ export async function GET(request: NextRequest) {
             createdAt: 1,
             updatedAt: 1,
             resolvedAt: 1,
+            adminResponses: 1,
           },
         })
         .sort({ createdAt: -1 })
