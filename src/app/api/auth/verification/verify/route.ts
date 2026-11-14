@@ -1,6 +1,5 @@
-﻿import { connection, NextRequest, NextResponse } from "next/server";
-import { getDatabase } from "@/lib/mongodb";
-import { getMongoClient } from "@/lib/mongodb";
+import { connection, NextRequest, NextResponse } from "next/server";
+import { getDatabase, getMongoClient } from "@/lib/mongodb";
 import {
   AUTH_OTP_CHANNELS,
   AUTH_OTP_MAX_ATTEMPTS,
@@ -11,6 +10,13 @@ import {
   type AuthOtpPurpose,
   type AuthVerificationDocument,
 } from "@/lib/auth-verification";
+import {
+  ensurePasswordResetIndexes,
+  generatePasswordResetToken,
+  hashPasswordResetToken,
+  PASSWORD_RESET_TOKEN_EXPIRY_MS,
+  type PasswordResetTokenDocument,
+} from "@/lib/password-reset";
 
 function invalidOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -68,23 +74,16 @@ export async function POST(request: NextRequest) {
       !AUTH_OTP_PURPOSES.includes(purpose as AuthOtpPurpose)
     ) {
       return NextResponse.json(
-        { success: false, message: "Enter a valid verification request and six-digit code." },
+        {
+          success: false,
+          message: "Enter a valid verification request and six-digit code.",
+        },
         { status: 400 }
       );
     }
 
     const selectedChannel = channel as AuthOtpChannel;
     const selectedPurpose = purpose as AuthOtpPurpose;
-
-    if (selectedPurpose !== "registration") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Password recovery verification will be handled by the password-reset process.",
-        },
-        { status: 400 }
-      );
-    }
 
     const db = await getDatabase();
     await ensureAuthVerificationIndexes();
@@ -94,14 +93,71 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "Invalid or expired verification code." },
+        {
+          success: false,
+          message: "Invalid or expired verification code.",
+        },
         { status: 400 }
       );
     }
 
-    if (user.accountVerified === true) {
+    if (user.status === "disabled") {
       return NextResponse.json(
-        { success: true, message: "Your account is already verified." }
+        {
+          success: false,
+          message: "This account is unavailable.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (selectedPurpose === "registration" && user.accountVerified === true) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Your account is already verified.",
+        }
+      );
+    }
+
+    if (
+      selectedPurpose === "password-reset" &&
+      user.accountVerified !== true
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid or expired verification code.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      selectedPurpose === "password-reset" &&
+      selectedChannel === "email" &&
+      user.emailVerified !== true
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid or expired verification code.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      selectedPurpose === "password-reset" &&
+      selectedChannel === "sms" &&
+      user.phoneVerified !== true
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid or expired verification code.",
+        },
+        { status: 400 }
       );
     }
 
@@ -114,7 +170,10 @@ export async function POST(request: NextRequest) {
 
     if (!destination) {
       return NextResponse.json(
-        { success: false, message: "The selected contact method is unavailable." },
+        {
+          success: false,
+          message: "The selected contact method is unavailable.",
+        },
         { status: 400 }
       );
     }
@@ -126,14 +185,17 @@ export async function POST(request: NextRequest) {
 
     const verification = await verifications.findOne({
       userId,
-      purpose: "registration",
+      purpose: selectedPurpose,
       channel: selectedChannel,
       destination,
     });
 
     if (!verification) {
       return NextResponse.json(
-        { success: false, message: "No active verification code was found. Request a new code." },
+        {
+          success: false,
+          message: "No active verification code was found. Request a new code.",
+        },
         { status: 400 }
       );
     }
@@ -141,13 +203,16 @@ export async function POST(request: NextRequest) {
     if (verification.expiresAt.getTime() <= now.getTime()) {
       await verifications.deleteOne({
         userId,
-        purpose: "registration",
+        purpose: selectedPurpose,
         channel: selectedChannel,
         codeHash: verification.codeHash,
       });
 
       return NextResponse.json(
-        { success: false, message: "Your verification code has expired. Request a new code." },
+        {
+          success: false,
+          message: "Your verification code has expired. Request a new code.",
+        },
         { status: 400 }
       );
     }
@@ -155,13 +220,16 @@ export async function POST(request: NextRequest) {
     if (verification.attempts >= AUTH_OTP_MAX_ATTEMPTS) {
       await verifications.deleteOne({
         userId,
-        purpose: "registration",
+        purpose: selectedPurpose,
         channel: selectedChannel,
         codeHash: verification.codeHash,
       });
 
       return NextResponse.json(
-        { success: false, message: "Too many incorrect attempts. Request a new code." },
+        {
+          success: false,
+          message: "Too many incorrect attempts. Request a new code.",
+        },
         { status: 429 }
       );
     }
@@ -169,7 +237,7 @@ export async function POST(request: NextRequest) {
     const validCode = verifyAuthOtpHash(
       verification.codeHash,
       userId,
-      "registration",
+      selectedPurpose,
       selectedChannel,
       destination,
       code
@@ -179,7 +247,7 @@ export async function POST(request: NextRequest) {
       const updated = await verifications.findOneAndUpdate(
         {
           userId,
-          purpose: "registration",
+          purpose: selectedPurpose,
           channel: selectedChannel,
           destination,
           codeHash: verification.codeHash,
@@ -196,7 +264,7 @@ export async function POST(request: NextRequest) {
       if (updated && updated.attempts >= AUTH_OTP_MAX_ATTEMPTS) {
         await verifications.deleteOne({
           userId,
-          purpose: "registration",
+          purpose: selectedPurpose,
           channel: selectedChannel,
           codeHash: verification.codeHash,
         });
@@ -211,6 +279,86 @@ export async function POST(request: NextRequest) {
         },
         { status: updated ? 400 : 429 }
       );
+    }
+
+    const client = await getMongoClient();
+    const session = client.startSession();
+
+    if (selectedPurpose === "password-reset") {
+      await ensurePasswordResetIndexes();
+
+      const resetToken = generatePasswordResetToken();
+      const resetTokenDocument: PasswordResetTokenDocument = {
+        userId,
+        tokenHash: hashPasswordResetToken(resetToken),
+        createdAt: now,
+        expiresAt: new Date(
+          now.getTime() + PASSWORD_RESET_TOKEN_EXPIRY_MS
+        ),
+      };
+
+      const resetTokens =
+        db.collection<PasswordResetTokenDocument>("passwordResetTokens");
+
+      try {
+        await session.withTransaction(async () => {
+          const currentUser = await users.findOne(
+            {
+              _id: user._id,
+              accountVerified: true,
+              status: { $ne: "disabled" },
+            },
+            { session }
+          );
+
+          if (!currentUser) {
+            throw new Error("ACCOUNT_NOT_ELIGIBLE");
+          }
+
+          const consumed = await verifications.deleteOne(
+            {
+              userId,
+              purpose: "password-reset",
+              channel: selectedChannel,
+              destination,
+              codeHash: verification.codeHash,
+              expiresAt: { $gt: now },
+              attempts: { $lt: AUTH_OTP_MAX_ATTEMPTS },
+            },
+            { session }
+          );
+
+          if (consumed.deletedCount !== 1) {
+            throw new Error("OTP_CONSUMPTION_FAILED");
+          }
+
+          await resetTokens.replaceOne(
+            { userId },
+            resetTokenDocument,
+            { upsert: true, session }
+          );
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: "Your recovery code has been verified. You can now choose a new password.",
+          resetToken,
+          expiresInSeconds: PASSWORD_RESET_TOKEN_EXPIRY_MS / 1000,
+        });
+      } catch (error) {
+        console.error("Password-reset verification transaction failed:", error);
+
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Unable to complete password recovery verification. Please request a new code.",
+          },
+          { status: 409 }
+        );
+      } finally {
+        await session.endSession();
+      }
     }
 
     const verificationUpdate =
@@ -229,10 +377,6 @@ export async function POST(request: NextRequest) {
             accountVerifiedAt: now,
             updatedAt: now,
           };
-
-    // Update the account and consume the OTP in one transaction.
-    const client = await getMongoClient();
-    const session = client.startSession();
 
     try {
       await session.withTransaction(async () => {
@@ -280,9 +424,11 @@ export async function POST(request: NextRequest) {
     } finally {
       await session.endSession();
     }
+
     return NextResponse.json({
       success: true,
-      message: "Your AgriVanta account has been verified successfully. You can now log in.",
+      message:
+        "Your AgriVanta account has been verified successfully. You can now log in.",
       accountVerified: true,
       verifiedChannel: selectedChannel,
     });
@@ -290,9 +436,11 @@ export async function POST(request: NextRequest) {
     console.error("Authentication verification failed:", error);
 
     return NextResponse.json(
-      { success: false, message: "Unable to verify your account right now." },
+      {
+        success: false,
+        message: "Unable to verify your account right now.",
+      },
       { status: 500 }
     );
   }
 }
-
