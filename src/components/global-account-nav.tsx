@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -21,6 +21,7 @@ import {
   Newspaper,
   MessageSquareText,
   Info,
+  HandHeart,
 } from "lucide-react";
 
 type AccountRole = "farmer" | "buyer" | "supplier" | "worker" | "expert";
@@ -45,6 +46,7 @@ const moreLinks = [
   { label: "Reports", href: "/reports", icon: BookOpen },
   { label: "Feedback", href: "/feedback", icon: MessageSquareText },
   { label: "About Us", href: "/about", icon: Info },
+  { label: "Support Us", href: "/support-us", icon: HandHeart },
 ];
 const navigationLinks = [
   { label: "Marketplace", href: "/products", icon: Store },

@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import GlobalAccountNav from "@/components/global-account-nav";
 import RecentPageTracker from "@/components/recent-page-tracker";
 import AssistPanel from "@/components/assist/AssistPanel";
+
 
 function AppShellContent() {
   const pathname = usePathname();
@@ -22,6 +23,7 @@ function AppShellContent() {
       <RecentPageTracker />
       {!isDashboardRoute && <GlobalAccountNav />}
       <AssistPanel />
+      
     </>
   );
 }
@@ -33,3 +35,5 @@ export default function AppShell() {
     </Suspense>
   );
 }
+
+

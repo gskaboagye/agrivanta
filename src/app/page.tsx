@@ -1,4 +1,4 @@
-import NewsPreview from "@/components/home/news-preview";
+﻿import NewsPreview from "@/components/home/news-preview";
 
 import {
   ArrowRight,
@@ -25,73 +25,73 @@ import {
 const marketplaceTypes = [
   {
     title: "Farm products",
-    description: "Explore produce, livestock, seeds, fertilizers and farm supplies.",
+    description: "Discover fresh produce, livestock, seeds, fertilizers and other agricultural supplies.",
     icon: ShoppingBag,
     href: "/products?type=product",
   },
   {
     title: "Equipment for hire",
-    description: "Find tractors, irrigation equipment and agricultural machinery.",
+    description: "Find tractors, irrigation systems and agricultural machinery available for hire.",
     icon: Tractor,
     href: "/products?type=hire",
   },
   {
     title: "Farm services",
-    description: "Connect with providers for land preparation, harvesting and more.",
+    description: "Connect with service providers offering land preparation, planting, harvesting and other farm services.",
     icon: Wrench,
     href: "/products?type=service",
   },
   {
-    title: "Farm labourers",
-    description: "Find people for planting, weeding, harvesting and other farm work.",
+    title: "Agricultural workers",
+    description: "Find workers for planting, weeding, harvesting and other agricultural activities.",
     icon: Users,
     href: "/products?type=worker",
   },
   {
     title: "Agricultural experts",
-    description: "Find agronomists and advisers for crop, soil and livestock support.",
+    description: "Connect with agronomists and agricultural advisers for crop, soil and livestock guidance.",
     icon: GraduationCap,
     href: "/products?type=expert",
   },
   {
     title: "Tools and supplies",
-    description: "Browse useful equipment, tools and parts for farm operations.",
+    description: "Explore tools, equipment, spare parts and essential supplies for farm operations.",
     icon: Package,
     href: "/products?category=Farm%20Equipment",
   },
 ];
 
 const categories = [
-  { name: "Farm Produce", detail: "Grains, fruits and vegetables", icon: Wheat },
-  { name: "Seeds & Seedlings", detail: "Prepare for the next planting", icon: Sprout },
-  { name: "Fertilizers", detail: "Nutrients for crop growth", icon: Trees },
-  { name: "Crop Protection", detail: "Crop-care products", icon: FlaskConical },
-  { name: "Livestock & Feed", detail: "Animals, feed and supplies", icon: Beef },
-  { name: "Farm Equipment", detail: "Tools and machinery", icon: Tractor },
+  { name: "Farm Produce", detail: "Grains, fruits and fresh vegetables", icon: Wheat },
+  { name: "Seeds & Seedlings", detail: "Seeds and seedlings for crop production", icon: Sprout },
+  { name: "Fertilizers", detail: "Nutrients to support healthy crop growth", icon: Trees },
+  { name: "Crop Protection", detail: "Products for managing pests and crop diseases", icon: FlaskConical },
+  { name: "Livestock & Feed", detail: "Livestock, animal feed and related supplies", icon: Beef },
+  { name: "Farm Equipment", detail: "Agricultural tools, machinery and equipment", icon: Tractor },
 ];
 
 const safetyTips = [
-  "Confirm product details, quantity, price and delivery arrangements in writing.",
-  "Inspect goods on delivery when practical and document any differences.",
-  "Verify payments with your payment provider; do not rely on screenshots alone.",
-  "Keep transaction records and report suspected scams.",
+  "Confirm product details, quantities, prices and delivery arrangements in writing.",
+  "Inspect goods upon delivery whenever possible and document any discrepancies.",
+  "Confirm payments directly with your payment provider. Never rely on payment screenshots alone.",
+  "Keep transaction records and report suspicious activities.",
 ];
 
 const steps = [
   {
     number: "01",
     title: "Find what you need",
-    description: "Search by product, category, location or service.",
+    description: "Search for products, categories, locations or agricultural services.",
   },
   {
     number: "02",
     title: "Review the offer",
-    description: "Check the description, price, availability and seller details.",
+    description: "Examine product descriptions, prices, availability and seller information.",
   },
   {
     number: "03",
     title: "Agree on the details",
-    description: "Confirm quality, delivery or collection, and payment terms.",
+    description: "Confirm product quality, quantities, delivery or collection arrangements and payment terms.",
   },
 ];
 
@@ -124,7 +124,7 @@ export default function Home() {
               Agriculture works better when we <span className="text-[#E6BD57]">connect.</span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
-              Discover farm produce and supplies, find equipment and services, and access practical farming informationÃ¢â‚¬â€all in one place.
+              Discover farm produce and supplies, explore equipment and services, and access practical farming information — all in one place.
             </p>
 
             <form action="/products" className="mt-8 flex max-w-xl flex-col gap-2 rounded-xl bg-white p-2 shadow-xl sm:flex-row">
@@ -291,7 +291,7 @@ export default function Home() {
               <div className="flex-1">
                 <h3 className="font-bold">Trusted agricultural information</h3>
                 <p className="mt-1 text-sm leading-6 text-[#647367]">
-                  Use reliable sources for agricultural updates, research and practical farming guidance.
+                  Access agricultural updates, research and practical farming guidance from trusted institutions and organizations.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
                   <a href="https://mofa.gov.gh/" target="_blank" rel="noopener noreferrer" className="text-[#17472D] underline-offset-4 hover:underline">Ministry of Food and Agriculture</a>
@@ -309,9 +309,9 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9B741F]">Getting started</p>
-            <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">A clearer way to get connected</h2>
+            <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">How AgriVanta Works</h2>
             <p className="mt-3 text-sm leading-7 text-[#647367] sm:text-base">
-              Start with a search, review the offer and agree on the details before making a transaction.
+              Search for what you need, review available offers, and communicate with the other party to agree on the details before completing a transaction.
             </p>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -336,9 +336,9 @@ export default function Home() {
             <span className="inline-flex items-center gap-2 rounded-full bg-[#EAF0E6] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#17472D]">
               <ShieldCheck size={16} /> Trade carefully
             </span>
-            <h2 className="mt-5 text-2xl font-extrabold sm:text-3xl">Make informed trading decisions.</h2>
+            <h2 className="mt-5 text-2xl font-extrabold sm:text-3xl">Trade with Confidence and Make Informed Decisions</h2>
             <p className="mt-4 text-sm leading-7 text-[#647367] sm:text-base">
-              Always verify important details and keep records of your agreements. Use the platform to discover offers, but confirm arrangements directly before completing a transaction.
+              Verify important details, communicate clearly and keep records of your agreements. Use AgriVanta to discover available offers, then confirm all arrangements directly before completing a transaction.
             </p>
           </div>
           <div className="rounded-2xl border border-[#E7E4D9] bg-white p-5 sm:p-7">
@@ -363,9 +363,9 @@ export default function Home() {
           <div className="grid gap-8 p-6 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-center lg:p-12">
             <div className="max-w-2xl">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E6BD57]">For farmers and providers</p>
-              <h2 className="mt-3 text-2xl font-extrabold text-white sm:text-3xl">Bring your agricultural business to more people.</h2>
+              <h2 className="mt-3 text-2xl font-extrabold text-white sm:text-3xl">Reach More Customers Through AgriVanta</h2>
               <p className="mt-3 text-sm leading-7 text-white/75 sm:text-base">
-                List products, equipment or services and connect with people looking for agricultural offers.
+                List your agricultural products, equipment or services and connect with potential customers looking for solutions.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
@@ -380,40 +380,116 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="bg-[#103720] text-white">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-2 lg:px-8">
-          <div>
-            <a href="/" className="text-xl font-extrabold tracking-tight">AgriVanta</a>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-white/70">
-              Powering Every Link in Agriculture. Connecting trade, knowledge and technology to help agriculture grow.
+            <footer className="bg-[#103720] text-white">
+        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+
+            {/* Brand */}
+            <div>
+              <a href="/" className="inline-flex items-center gap-2 text-xl font-extrabold tracking-tight">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+                  <Sprout size={23} />
+                </span>
+                AgriVanta
+              </a>
+
+              <p className="mt-4 max-w-sm text-sm leading-7 text-white/70">
+                Connecting people, trade, knowledge and technology
+                to create opportunities across Ghana's agricultural sector.
+              </p>
+            </div>
+
+            {/* Marketplace */}
+            <div>
+              <h3 className="mb-5 text-sm font-bold uppercase tracking-wider text-white">
+                Marketplace
+              </h3>
+              <div className="space-y-3 text-sm text-white/70">
+                <a href="/products" className="block transition hover:text-[#D9A441]">Browse agricultural products</a>
+                <a href="/products?type=hire" className="block transition hover:text-[#D9A441]">Equipment and machinery hire</a>
+                <a href="/products?type=worker" className="block transition hover:text-[#D9A441]">Agricultural workers</a>
+                <a href="/products?type=expert" className="block transition hover:text-[#D9A441]">Agricultural experts</a>
+              </div>
+            </div>
+
+            {/* Account and resources */}
+            <div>
+              <h3 className="mb-5 text-sm font-bold uppercase tracking-wider text-white">
+                Discover AgriVanta
+              </h3>
+              <div className="space-y-3 text-sm text-white/70">
+                <a href="/agriguide" className="block transition hover:text-[#D9A441]">AgriGuide</a>
+                <a href="/news" className="block transition hover:text-[#D9A441]">Agricultural news</a>
+                <a href="/reports" className="block transition hover:text-[#D9A441]">Reports</a>
+                <a href="/about" className="block transition hover:text-[#D9A441]">About Us</a>
+                <a href="/feedback" className="block transition hover:text-[#D9A441]">Feedback</a>
+              </div>
+            </div>
+
+            {/* Support and social */}
+            <div>
+              <h3 className="mb-5 text-sm font-bold uppercase tracking-wider text-white">
+                Support Our Mission
+              </h3>
+
+              <a
+                href="/support-us"
+                className="inline-flex items-center gap-2 rounded-lg bg-[#D9A441] px-4 py-3 text-sm font-bold text-[#173B27] transition hover:bg-[#E7B958]"
+              >
+                <Sprout size={18} />
+                Support AgriVanta
+                <ArrowRight size={16} />
+              </a>
+
+              <p className="mt-4 text-sm leading-6 text-white/65">
+                Your support helps us develop a more connected and accessible
+                agricultural community.
+              </p>
+
+              <h3 className="mb-3 mt-6 text-sm font-bold text-white">
+                Follow AgriVanta
+              </h3>
+
+              <div className="flex flex-wrap gap-2">
+                {["Facebook", "Instagram", "LinkedIn", "YouTube", "TikTok"].map((platform) => (
+                  <span
+                    key={platform}
+                    title={`${platform} — coming soon`}
+                    className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white/65"
+                  >
+                    {platform}
+                  </span>
+                ))}
+              </div>
+
+              <p className="mt-3 text-xs text-white/45">
+                Follow our journey. Our official social media pages will be available soon.
+              </p>
+            </div>
+          </div>
+
+          <div className="my-9 border-t border-white/15" />
+
+          <div className="flex flex-col gap-4 text-sm text-white/65 md:flex-row md:items-center md:justify-between">
+            <p>
+              © 2026 AgriVanta. All rights reserved.
             </p>
-          </div>
-          <div className="grid grid-cols-2 gap-6 text-sm text-white/75 sm:grid-cols-3">
-            <div className="space-y-3">
-              <p className="font-bold text-white">Marketplace</p>
-              <a href="/products" className="block hover:text-white">Browse products</a>
-              <a href="/products?type=hire" className="block hover:text-white">Equipment hire</a>
-              <a href="/products?type=worker" className="block hover:text-white">Farm labourers</a>
-              <a href="/products?type=expert" className="block hover:text-white">Agricultural experts</a>
-            </div>
-            <div className="space-y-3">
-              <p className="font-bold text-white">Your account</p>
-              <a href="/login" className="block hover:text-white">Sign in</a>
-              <a href="/register" className="block hover:text-white">Create an account</a>
-              <a href="#how-it-works" className="block hover:text-white">How it works</a>
-              <a href="#safe-trading" className="block hover:text-white">Safe trading</a>
-            </div>
-            <div className="space-y-3">
-              <p className="font-bold text-white">Farm knowledge</p>
-              <a href="/agriguide" className="block hover:text-white">AgriGuide</a>
-              <a href="https://www.fao.org/ghana/en" target="_blank" rel="noopener noreferrer" className="block hover:text-white">FAO Ghana</a>
-            </div>
-          </div>
-          <div className="border-t border-white/15 pt-5 text-xs text-white/60 md:col-span-2">
-            Ã‚Â© 2026 AgriVanta. Powering Every Link in Agriculture.
+
+            <p>
+              Designed &amp; Developed by{" "}
+              <span className="font-bold text-white">Godfred Sefa Aboagye</span>
+              <span className="mx-2 hidden sm:inline">·</span>
+              <span className="block sm:inline">Software Engineer</span>
+            </p>
           </div>
         </div>
       </footer>
     </main>
   );
 }
+
+
+
+
+
+
