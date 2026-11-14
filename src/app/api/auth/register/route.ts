@@ -1,9 +1,10 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { MongoServerError } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 import {
   ACCOUNT_ROLES,
   hashPassword,
+  createSession,
   type AccountRole,
 } from "@/lib/auth";
 import {
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: "An account with this email already exists. Try logging in or verifying your existing account.",
+          message: "An account with this email already exists. Try logging in.",
         },
         { status: 409 }
       );
@@ -141,10 +142,11 @@ export async function POST(request: Request) {
       phonePublic: false,
       whatsappEnabled: false,
 
-      // Contact and account verification state.
+      // MVP mode: account access is enabled without contact verification.
+      // Contact verification remains pending for future activation.
       emailVerified: false,
       phoneVerified: false,
-      accountVerified: false,
+      accountVerified: true,
 
       // Registration consent records.
       termsAccepted: true,
@@ -158,10 +160,18 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
+    await createSession({
+      id: result.insertedId.toString(),
+      name,
+      email,
+      phone,
+      role: role as AccountRole,
+    });
+
     return NextResponse.json(
       {
         success: true,
-        message: "Your account has been created. Choose how you would like to verify it.",
+        message: "Your account has been created successfully. You can now log in.",
         user: {
           id: result.insertedId.toString(),
           name,
@@ -170,7 +180,7 @@ export async function POST(request: Request) {
           role,
           emailVerified: false,
           phoneVerified: false,
-          accountVerified: false,
+          accountVerified: true,
         },
       },
       { status: 201 }
@@ -200,3 +210,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

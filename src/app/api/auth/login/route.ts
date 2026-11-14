@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 import {
@@ -114,19 +114,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Require successful email or phone verification.
-    if (user.accountVerified !== true) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "ACCOUNT_NOT_VERIFIED",
-          message:
-            "Please verify your email address or phone number before logging in.",
-        },
-        { status: 403 }
-      );
-    }
-
     if (!(user._id instanceof ObjectId)) {
       return NextResponse.json(
         {
@@ -177,3 +164,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

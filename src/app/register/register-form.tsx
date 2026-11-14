@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
@@ -93,7 +93,7 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push(`/verify-account?email=${encodeURIComponent(emailResult.data)}`);
+      router.push(redirectTo);
     } catch {
       setError("Unable to connect. Please try again.");
     } finally {
@@ -310,6 +310,7 @@ export default function RegisterPage() {
     </main>
   );
 }
+
 
 
 

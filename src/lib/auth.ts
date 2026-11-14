@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
@@ -167,7 +167,6 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           phone: 1,
           role: 1,
           status: 1,
-          accountVerified: 1,
           sessionVersion: 1,
         },
       }
@@ -184,12 +183,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (user.status === "disabled") {
       return null;
     }
-
-    if (user.accountVerified !== true) {
-      return null;
-    }
-
-    if (user.role !== claims.role) {
+if (user.role !== claims.role) {
       return null;
     }
 
@@ -216,3 +210,4 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 }
+
