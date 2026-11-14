@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   LayoutDashboard,
+  KeyRound,
   LogIn,
   LogOut,
   Sprout,
@@ -338,6 +339,16 @@ export default function GlobalAccountNav() {
                         My Profile
                       </Link>
 
+                      <Link
+                        href="/dashboard/change-password"
+                        role="menuitem"
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold text-[#344536] transition hover:bg-[#EAF0E6] hover:text-[#17472D]"
+                      >
+                        <KeyRound size={18} />
+                        Change Password
+                      </Link>
+
                       <div className="my-1 border-t border-[#EDF0E9]" />
 
                       <button
@@ -489,3 +500,4 @@ export default function GlobalAccountNav() {
     </header>
   );
 }
+

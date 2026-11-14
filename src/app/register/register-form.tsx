@@ -93,12 +93,7 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push(
-        (role === "farmer" || role === "supplier")
-          ? redirectTo
-          : "/dashboard"
-      );
-      router.refresh();
+      router.push(`/verify-account?email=${encodeURIComponent(emailResult.data)}`);
     } catch {
       setError("Unable to connect. Please try again.");
     } finally {
@@ -315,5 +310,6 @@ export default function RegisterPage() {
     </main>
   );
 }
+
 
 

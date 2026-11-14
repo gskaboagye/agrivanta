@@ -1,0 +1,186 @@
+﻿import "server-only";
+
+import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import { ObjectId } from "mongodb";
+import { getDatabase } from "@/lib/mongodb";
+
+export const ACCOUNT_ROLES = [
+  "farmer",
+  "buyer",
+  "supplier",
+  "worker",
+  "expert",
+] as const;
+
+export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: AccountRole;
+};
+
+const COOKIE_NAME = "agrivanta_session";
+const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 7;
+
+function getSecret() {
+  const secret = process.env.AUTH_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "AUTH_SECRET must contain a strong secret of at least 32 characters."
+    );
+  }
+
+  return new TextEncoder().encode(secret);
+}
+
+function isValidUserId(id: string): boolean {
+  return /^[a-fA-F0-9]{24}$/.test(id);
+}
+
+export async function hashPassword(password: string) {
+  return bcrypt.hash(password, 12);
+}
+
+export async function verifyPassword(
+  password: string,
+  passwordHash: string
+) {
+  return bcrypt.compare(password, passwordHash);
+}
+
+export async function createSession(user: AuthUser) {
+  if (
+    !isValidUserId(user.id) ||
+    !ACCOUNT_ROLES.includes(user.role)
+  ) {
+    throw new Error("Invalid user information for session creation.");
+  }
+
+  const token = await new SignJWT({
+    role: user.role,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.id)
+    .setIssuedAt()
+    .setExpirationTime(`${SESSION_DURATION_SECONDS}s`)
+    .sign(getSecret());
+
+  const cookieStore = await cookies();
+
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_DURATION_SECONDS,
+  });
+}
+
+export async function destroySession() {
+  const cookieStore = await cookies();
+
+  cookieStore.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+export async function getSessionClaims() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_NAME)?.value;
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, getSecret(), {
+      algorithms: ["HS256"],
+    });
+
+    if (
+      typeof payload.sub !== "string" ||
+      !isValidUserId(payload.sub) ||
+      typeof payload.role !== "string" ||
+      !ACCOUNT_ROLES.includes(payload.role as AccountRole)
+    ) {
+      return null;
+    }
+
+    return {
+      userId: payload.sub,
+      role: payload.role as AccountRole,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const claims = await getSessionClaims();
+
+  if (!claims) {
+    return null;
+  }
+
+  try {
+    const db = await getDatabase();
+
+    const user = await db.collection("users").findOne(
+      { _id: new ObjectId(claims.userId) },
+      {
+        projection: {
+          name: 1,
+          email: 1,
+          phone: 1,
+          role: 1,
+          status: 1,
+          accountVerified: 1,
+        },
+      }
+    );
+
+    if (
+      !user ||
+      typeof user.role !== "string" ||
+      !ACCOUNT_ROLES.includes(user.role as AccountRole)
+    ) {
+      return null;
+    }
+
+    // Reject disabled accounts, including users with existing sessions.
+    if (user.status === "disabled") {
+      return null;
+    }
+
+    // Reject accounts that have not completed verification.
+    if (user.accountVerified !== true) {
+      return null;
+    }
+
+    // Reject sessions whose role no longer matches the database.
+    if (user.role !== claims.role) {
+      return null;
+    }
+
+    return {
+      id: user._id.toString(),
+      name: String(user.name ?? ""),
+      email: String(user.email ?? ""),
+      phone: String(user.phone ?? ""),
+      role: user.role as AccountRole,
+    };
+  } catch (error) {
+    console.error("Current user lookup failed:", error);
+    return null;
+  }
+}

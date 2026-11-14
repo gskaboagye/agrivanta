@@ -1,5 +1,4 @@
-﻿
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 import {
@@ -14,7 +13,6 @@ import { emailSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
-    // Parse and validate request body.
     let body: unknown;
 
     try {
@@ -50,7 +48,6 @@ export async function POST(request: Request) {
         ? data.password
         : "";
 
-    // Validate email and password.
     if (
       !emailResult.success ||
       !password ||
@@ -71,7 +68,6 @@ export async function POST(request: Request) {
       email,
     });
 
-    // Use the same generic response for invalid credentials.
     if (
       !user ||
       typeof user.passwordHash !== "string" ||
@@ -94,7 +90,6 @@ export async function POST(request: Request) {
         user.passwordHash
       );
     } catch {
-      // Treat malformed password hashes as invalid credentials.
       passwordMatches = false;
     }
 
@@ -108,7 +103,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Prevent disabled accounts from creating new sessions.
     if (user.status === "disabled") {
       return NextResponse.json(
         {
@@ -120,7 +114,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate the database account ID.
+    // Require successful email or phone verification.
+    if (user.accountVerified !== true) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "ACCOUNT_NOT_VERIFIED",
+          message:
+            "Please verify your email address or phone number before logging in.",
+        },
+        { status: 403 }
+      );
+    }
+
     if (!(user._id instanceof ObjectId)) {
       return NextResponse.json(
         {
@@ -131,7 +137,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ensure the account has a supported AgriVanta role.
     if (
       typeof user.role !== "string" ||
       !ACCOUNT_ROLES.includes(user.role as AccountRole)
@@ -145,7 +150,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Build the authenticated user from database information.
     const publicUser: AuthUser = {
       id: user._id.toString(),
       name: String(user.name ?? ""),
@@ -154,10 +158,8 @@ export async function POST(request: Request) {
       role: user.role as AccountRole,
     };
 
-    // Create the secure session.
     await createSession(publicUser);
 
-    // Preserve the existing frontend response structure.
     return NextResponse.json({
       success: true,
       message: "Login successful.",

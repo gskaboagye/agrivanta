@@ -1,23 +1,18 @@
-﻿
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { MongoServerError } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 import {
   ACCOUNT_ROLES,
-  createSession,
   hashPassword,
   type AccountRole,
-  type AuthUser,
 } from "@/lib/auth";
 import {
   emailSchema,
   optionalPhoneSchema,
 } from "@/lib/validation";
 
-
 export async function POST(request: Request) {
   try {
-    // Parse request safely.
     let body: unknown;
 
     try {
@@ -29,19 +24,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !body ||
-      typeof body !== "object" ||
-      Array.isArray(body)
-    ) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
       return NextResponse.json(
         { success: false, message: "Invalid request data." },
         { status: 400 }
       );
     }
+
     const data = body as Record<string, unknown>;
 
-    // Require explicit agreement to both legal documents.
     if (data.termsAccepted !== true) {
       return NextResponse.json(
         {
@@ -51,6 +42,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
     const name =
       typeof data.name === "string" ? data.name.trim() : "";
 
@@ -68,33 +60,24 @@ export async function POST(request: Request) {
     const role =
       typeof data.role === "string" ? data.role : "";
 
-    // Validate name.
     if (name.length < 2 || name.length > 80) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Name must be 2â€“80 characters.",
-        },
+        { success: false, message: "Name must be between 2 and 80 characters." },
         { status: 400 }
       );
     }
 
-    // Validate and normalize email.
     const emailResult = emailSchema.safeParse(email);
 
     if (!emailResult.success) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Enter a valid email address.",
-        },
+        { success: false, message: "Enter a valid email address." },
         { status: 400 }
       );
     }
 
     email = emailResult.data;
 
-    // Validate and normalize the optional phone number.
     const phoneResult = optionalPhoneSchema.safeParse(phone);
 
     if (!phoneResult.success) {
@@ -109,7 +92,7 @@ export async function POST(request: Request) {
     }
 
     phone = phoneResult.data;
-// Validate password using its UTF-8 byte length.
+
     const passwordBytes = new TextEncoder().encode(password).length;
 
     if (password.length < 10 || passwordBytes > 72) {
@@ -122,13 +105,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate account role.
     if (!ACCOUNT_ROLES.includes(role as AccountRole)) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Select a valid account type.",
-        },
+        { success: false, message: "Select a valid account type." },
         { status: 400 }
       );
     }
@@ -136,7 +115,6 @@ export async function POST(request: Request) {
     const db = await getDatabase();
     const users = db.collection("users");
 
-    // Check for an existing account.
     const existingUser = await users.findOne(
       { email },
       { projection: { _id: 1 } }
@@ -146,55 +124,58 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: "An account with this email already exists.",
+          message: "An account with this email already exists. Try logging in or verifying your existing account.",
         },
         { status: 409 }
       );
     }
 
-    // Hash password before storing it.
     const passwordHash = await hashPassword(password);
     const now = new Date();
 
-    // Only explicitly approved fields are stored.
     const result = await users.insertOne({
       name,
       email,
       phone,
-      role,
+      role: role as AccountRole,
       phonePublic: false,
       whatsappEnabled: false,
+
+      // Contact and account verification state.
+      emailVerified: false,
+      phoneVerified: false,
+      accountVerified: false,
+
+      // Registration consent records.
       termsAccepted: true,
       termsVersion: "1.0",
       privacyVersion: "1.0",
       termsAcceptedAt: now,
       privacyAcceptedAt: now,
+
       passwordHash,
       createdAt: now,
       updatedAt: now,
     });
 
-    const user: AuthUser = {
-      id: result.insertedId.toString(),
-      name,
-      email,
-      phone,
-      role: role as AccountRole,
-    };
-
-    // Automatically log in the newly registered user.
-    await createSession(user);
-
     return NextResponse.json(
       {
         success: true,
-        message: "Your AgriVanta account has been created.",
-        user,
+        message: "Your account has been created. Choose how you would like to verify it.",
+        user: {
+          id: result.insertedId.toString(),
+          name,
+          email,
+          phone,
+          role,
+          emailVerified: false,
+          phoneVerified: false,
+          accountVerified: false,
+        },
       },
       { status: 201 }
     );
   } catch (error) {
-    // Handle duplicate email errors from MongoDB.
     if (
       error instanceof MongoServerError &&
       error.code === 11000
@@ -219,6 +200,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-
-

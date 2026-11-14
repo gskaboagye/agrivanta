@@ -1,0 +1,190 @@
+﻿import "server-only";
+
+import {
+  createHmac,
+  randomBytes,
+  randomInt,
+  timingSafeEqual,
+} from "node:crypto";
+import { getDatabase } from "@/lib/mongodb";
+
+export const AUTH_OTP_EXPIRY_MS = 5 * 60 * 1000;
+export const AUTH_OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+export const AUTH_OTP_MAX_ATTEMPTS = 5;
+
+export const AUTH_OTP_PURPOSES = [
+  "registration",
+  "password-reset",
+] as const;
+
+export const AUTH_OTP_CHANNELS = [
+  "email",
+  "sms",
+] as const;
+
+export type AuthOtpPurpose =
+  (typeof AUTH_OTP_PURPOSES)[number];
+
+export type AuthOtpChannel =
+  (typeof AUTH_OTP_CHANNELS)[number];
+
+export type AuthVerificationDocument = {
+  userId: string;
+  purpose: AuthOtpPurpose;
+  channel: AuthOtpChannel;
+  destination: string;
+  codeHash: string;
+  attempts: number;
+  createdAt: Date;
+  expiresAt: Date;
+};
+
+function getOtpSecret(): string {
+  const secret = process.env.AUTH_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "AUTH_SECRET must contain at least 32 characters."
+    );
+  }
+
+  return secret;
+}
+
+export function generateAuthOtp(): string {
+  return randomInt(0, 1_000_000)
+    .toString()
+    .padStart(6, "0");
+}
+
+export function hashAuthOtp(
+  userId: string,
+  purpose: AuthOtpPurpose,
+  channel: AuthOtpChannel,
+  destination: string,
+  code: string
+): string {
+  return createHmac("sha256", getOtpSecret())
+    .update(
+      `${userId}:${purpose}:${channel}:${destination}:${code}`
+    )
+    .digest("hex");
+}
+
+export function verifyAuthOtpHash(
+  storedHash: string,
+  userId: string,
+  purpose: AuthOtpPurpose,
+  channel: AuthOtpChannel,
+  destination: string,
+  code: string
+): boolean {
+  if (!/^[a-f0-9]{64}$/i.test(storedHash)) {
+    return false;
+  }
+
+  if (!/^\d{6}$/.test(code)) {
+    return false;
+  }
+
+  const expectedHash = Buffer.from(
+    hashAuthOtp(
+      userId,
+      purpose,
+      channel,
+      destination,
+      code
+    ),
+    "hex"
+  );
+
+  const actualHash = Buffer.from(storedHash, "hex");
+
+  if (actualHash.length !== expectedHash.length) {
+    return false;
+  }
+
+  return timingSafeEqual(actualHash, expectedHash);
+}
+
+let indexesPromise: Promise<void> | null = null;
+
+export async function ensureAuthVerificationIndexes(): Promise<void> {
+  if (!indexesPromise) {
+    indexesPromise = (async () => {
+      const db = await getDatabase();
+
+      const verifications =
+        db.collection<AuthVerificationDocument>(
+          "authVerifications"
+        );
+
+      await Promise.all([
+        verifications.createIndex(
+          {
+            userId: 1,
+            purpose: 1,
+            channel: 1,
+          },
+          {
+            unique: true,
+            name: "auth_verification_user_purpose_channel_unique",
+          }
+        ),
+
+        verifications.createIndex(
+          { expiresAt: 1 },
+          {
+            expireAfterSeconds: 0,
+            name: "auth_verification_expiry",
+          }
+        ),
+      ]);
+    })().catch((error) => {
+      indexesPromise = null;
+      throw error;
+    });
+  }
+
+  return indexesPromise;
+}
+
+// Password-reset authorization tokens
+export const PASSWORD_RESET_TOKEN_EXPIRY_MS = 10 * 60 * 1000;
+
+export function generatePasswordResetToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export function hashPasswordResetToken(token: string): string {
+  return createHmac("sha256", getOtpSecret())
+    .update(`password-reset:${token}`)
+    .digest("hex");
+}
+
+export function verifyPasswordResetTokenHash(
+  storedHash: string,
+  token: string
+): boolean {
+  if (!/^[a-f0-9]{64}$/i.test(storedHash)) {
+    return false;
+  }
+
+  if (!/^[a-f0-9]{64}$/i.test(token)) {
+    return false;
+  }
+
+  const expectedHash = Buffer.from(
+    hashPasswordResetToken(token),
+    "hex"
+  );
+
+  const actualHash = Buffer.from(storedHash, "hex");
+
+  return (
+    actualHash.length === expectedHash.length &&
+    timingSafeEqual(actualHash, expectedHash)
+  );
+}
+
+

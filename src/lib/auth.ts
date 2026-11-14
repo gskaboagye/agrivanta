@@ -1,5 +1,4 @@
-
-import "server-only";
+﻿import "server-only";
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
@@ -63,8 +62,27 @@ export async function createSession(user: AuthUser) {
     throw new Error("Invalid user information for session creation.");
   }
 
+  const db = await getDatabase();
+
+  const account = await db.collection("users").findOne(
+    { _id: new ObjectId(user.id) },
+    { projection: { sessionVersion: 1 } }
+  );
+
+  if (!account) {
+    throw new Error("Unable to create a session for this account.");
+  }
+
+  const sessionVersion =
+    typeof account.sessionVersion === "number" &&
+    Number.isInteger(account.sessionVersion) &&
+    account.sessionVersion >= 0
+      ? account.sessionVersion
+      : 0;
+
   const token = await new SignJWT({
     role: user.role,
+    sessionVersion,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -112,7 +130,10 @@ export async function getSessionClaims() {
       typeof payload.sub !== "string" ||
       !isValidUserId(payload.sub) ||
       typeof payload.role !== "string" ||
-      !ACCOUNT_ROLES.includes(payload.role as AccountRole)
+      !ACCOUNT_ROLES.includes(payload.role as AccountRole) ||
+      typeof payload.sessionVersion !== "number" ||
+      !Number.isInteger(payload.sessionVersion) ||
+      payload.sessionVersion < 0
     ) {
       return null;
     }
@@ -120,6 +141,7 @@ export async function getSessionClaims() {
     return {
       userId: payload.sub,
       role: payload.role as AccountRole,
+      sessionVersion: payload.sessionVersion,
     };
   } catch {
     return null;
@@ -145,6 +167,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           phone: 1,
           role: 1,
           status: 1,
+          accountVerified: 1,
+          sessionVersion: 1,
         },
       }
     );
@@ -157,13 +181,26 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    // Reject disabled accounts, including users with existing sessions.
     if (user.status === "disabled") {
       return null;
     }
 
-    // Reject sessions whose role no longer matches the database.
+    if (user.accountVerified !== true) {
+      return null;
+    }
+
     if (user.role !== claims.role) {
+      return null;
+    }
+
+    const currentSessionVersion =
+      typeof user.sessionVersion === "number" &&
+      Number.isInteger(user.sessionVersion) &&
+      user.sessionVersion >= 0
+        ? user.sessionVersion
+        : 0;
+
+    if (currentSessionVersion !== claims.sessionVersion) {
       return null;
     }
 

@@ -214,3 +214,73 @@ export async function sendReportMessageEmail({
     html,
   });
 }
+
+
+/**
+ * Sends an authentication verification or password recovery code.
+ */
+export async function sendAuthVerificationEmail({
+  to,
+  userName,
+  code,
+  purpose,
+}: {
+  to: string;
+  userName: string;
+  code: string;
+  purpose: "registration" | "password-reset";
+}): Promise<EmailResult> {
+  const safeName = escapeHtml(userName);
+  const safeCode = escapeHtml(code);
+
+  const isRegistration = purpose === "registration";
+
+  const subject = isRegistration
+    ? "Verify your AgriVanta account"
+    : "Your AgriVanta password reset code";
+
+  const heading = isRegistration
+    ? "Verify your email address"
+    : "Reset your password";
+
+  const description = isRegistration
+    ? "Use the verification code below to verify your email address and activate your AgriVanta account."
+    : "Use the code below to continue resetting your AgriVanta password.";
+
+  return sendEmail({
+    to,
+    subject,
+    text: [
+      `Hello ${userName},`,
+      "",
+      description,
+      "",
+      `Your verification code is: ${code}`,
+      "",
+      "This code expires in 5 minutes.",
+      "Do not share this code with anyone.",
+      "",
+      "AgriVanta Support Team",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#26352b;line-height:1.6;">
+        <div style="background:#17472D;padding:24px;color:white;">
+          <h2 style="margin:0;">AgriVanta</h2>
+          <p style="margin:6px 0 0;">Agriculture Connected</p>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;">
+          <h2>Hello ${safeName},</h2>
+          <h3>${heading}</h3>
+          <p>${description}</p>
+          <div style="background:#f8f6ee;border:1px solid #e5e7eb;padding:20px;text-align:center;margin:24px 0;">
+            <p style="margin:0 0 8px;color:#718071;">Your verification code</p>
+            <strong style="font-size:32px;letter-spacing:8px;color:#17472D;">${safeCode}</strong>
+          </div>
+          <p>This code expires in <strong>5 minutes</strong>.</p>
+          <p>Do not share this code with anyone.</p>
+          <p>Regards,<br/><strong>AgriVanta Support Team</strong></p>
+        </div>
+      </div>
+    `,
+  });
+}

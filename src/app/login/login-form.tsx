@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
@@ -121,6 +121,15 @@ export default function LoginPage() {
             />
           </label>
 
+          <div className="flex justify-end">
+            <Link
+              href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`}
+              className="text-sm font-semibold text-[#17472D] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
           {error && (
             <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
               {error}
@@ -151,3 +160,4 @@ export default function LoginPage() {
     </main>
   );
 }
+
