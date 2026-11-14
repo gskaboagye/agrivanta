@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
@@ -37,10 +37,16 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    if (!termsAccepted) {
+      setError("You must agree to the Terms and Conditions and Privacy Policy.");
+      return;
+    }
 
     const emailResult = emailSchema.safeParse(email);
     const phoneResult = optionalPhoneSchema.safeParse(phone);
@@ -76,6 +82,7 @@ export default function RegisterPage() {
           phone: phoneResult.data,
           role,
           password,
+          termsAccepted: true,
         }),
       });
 
@@ -260,6 +267,27 @@ export default function RegisterPage() {
               />
             </label>
 
+            <div className="flex items-start gap-3 rounded-lg border border-[#D9DED4] bg-[#F8F6EE] p-4">
+              <input
+                id="termsAccepted"
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+                required
+                className="mt-1 h-4 w-4 accent-[#17472D]"
+              />
+              <label htmlFor="termsAccepted" className="text-sm leading-6 text-[#526354]">
+                I have read and agree to the{" "}
+                <Link href="/terms" target="_blank" className="font-semibold text-[#17472D] underline">
+                  Terms and Conditions
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" className="font-semibold text-[#17472D] underline">
+                  Privacy Policy
+                </Link>.
+              </label>
+            </div>
+
             {error && (
               <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
                 {error}
@@ -268,7 +296,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !termsAccepted}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#17472D] px-4 py-3.5 font-bold text-white hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Creating account..." : "Create account"}
@@ -287,3 +315,5 @@ export default function RegisterPage() {
     </main>
   );
 }
+
+

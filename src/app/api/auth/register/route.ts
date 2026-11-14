@@ -39,9 +39,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
     const data = body as Record<string, unknown>;
 
+    // Require explicit agreement to both legal documents.
+    if (data.termsAccepted !== true) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You must agree to the Terms and Conditions and Privacy Policy before registering.",
+        },
+        { status: 400 }
+      );
+    }
     const name =
       typeof data.name === "string" ? data.name.trim() : "";
 
@@ -155,6 +164,11 @@ export async function POST(request: Request) {
       role,
       phonePublic: false,
       whatsappEnabled: false,
+      termsAccepted: true,
+      termsVersion: "1.0",
+      privacyVersion: "1.0",
+      termsAcceptedAt: now,
+      privacyAcceptedAt: now,
       passwordHash,
       createdAt: now,
       updatedAt: now,
@@ -205,4 +219,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+
 
