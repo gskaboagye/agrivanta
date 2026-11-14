@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
@@ -14,6 +15,7 @@ import {
   ArrowUpRight,
   LayoutDashboard,
   Lock,
+  UserCircle,
 } from "lucide-react";
 
 import { getCurrentAdmin } from "@/lib/admin-auth";
@@ -30,7 +32,8 @@ const managementSections = [
   },
   {
     title: "User Reports",
-    description: "Review fraud complaints, suspicious listings and user misconduct reports.",
+    description:
+      "Review fraud complaints, suspicious listings and user misconduct reports.",
     icon: ShieldAlert,
     href: "/admin/user-reports",
     enabled: true,
@@ -51,7 +54,8 @@ const managementSections = [
   },
   {
     title: "Agricultural Reports",
-    description: "Upload, manage and publish agricultural reports and research.",
+    description:
+      "Upload, manage and publish agricultural reports and research.",
     icon: FileText,
     href: "/admin/reports/library",
     enabled: true,
@@ -68,6 +72,14 @@ const managementSections = [
     description: "Manage administrative and platform configurations.",
     icon: Settings,
     href: "/admin/settings",
+    enabled: true,
+  },
+  {
+    title: "Administrator Profile",
+    description:
+      "Manage your contact information and SMS notification preferences.",
+    icon: UserCircle,
+    href: "/admin/profile",
     enabled: true,
   },
 ];
@@ -103,9 +115,7 @@ async function AdminDashboardContent() {
               <p className="text-sm font-bold text-[#354737]">
                 {admin.name}
               </p>
-              <p className="text-xs text-[#899487]">
-                {admin.email}
-              </p>
+              <p className="text-xs text-[#899487]">{admin.email}</p>
             </div>
 
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#17472D]/10 text-sm font-bold text-[#17472D]">
