@@ -1,0 +1,2792 @@
+
+
+========================================
+FILE: src/app/api/admin/user-reports/route.ts
+========================================
+
+import { connection, NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
+import { hasPermission } from "@/lib/admin-permissions";
+import { getDatabase } from "@/lib/mongodb";
+
+const VALID_STATUSES = [
+  "pending",
+  "investigating",
+  "resolved",
+  "dismissed",
+];
+
+const VALID_CATEGORIES = [
+  "Fraud or Scam",
+  "Suspicious Listing",
+  "User Misconduct",
+  "Misleading Information",
+  "Platform Issue",
+  "Other",
+];
+
+export async function GET(request: NextRequest) {
+  await connection();
+
+  try {
+    const admin = await requireAdmin();
+
+    if (!admin.role) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Administrator role has not been configured.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // Super Admins and Report Managers can view all reports.
+    // Report Officers can only view reports assigned to them.
+    const canViewAllReports = hasPermission(
+      admin.role,
+      "view_all_reports"
+    );
+
+    const canViewAssignedReports = hasPermission(
+      admin.role,
+      "view_assigned_reports"
+    );
+
+    if (!canViewAllReports && !canViewAssignedReports) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You do not have permission to view user reports.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // This scope is applied to every report query and status count.
+    const scopeFilter: Record<string, unknown> = {};
+
+    if (!canViewAllReports) {
+      scopeFilter["assignedTo.adminId"] = admin.id;
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+
+    const pageValue = Number(searchParams.get("page") ?? "1");
+
+    const page = Number.isFinite(pageValue)
+      ? Math.max(1, Math.floor(pageValue))
+      : 1;
+
+    const pageSize = 15;
+
+    const status = searchParams.get("status");
+    const category = searchParams.get("category");
+    const search = searchParams.get("search")?.trim() ?? "";
+
+    // Start with the administrator's permitted report scope.
+    const filter: Record<string, unknown> = {
+      ...scopeFilter,
+    };
+
+    if (status && status !== "all") {
+      if (!VALID_STATUSES.includes(status)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid report status.",
+          },
+          { status: 400 }
+        );
+      }
+
+      filter.status = status;
+    }
+
+    if (category && category !== "all") {
+      if (!VALID_CATEGORIES.includes(category)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid report category.",
+          },
+          { status: 400 }
+        );
+      }
+
+      filter.category = category;
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const searchRegex = new RegExp(escapedSearch, "i");
+
+      filter.$or = [
+        { referenceNumber: searchRegex },
+        { subject: searchRegex },
+        { "reporter.name": searchRegex },
+        { "reporter.email": searchRegex },
+      ];
+    }
+
+    const db = await getDatabase();
+    const collection = db.collection("userReports");
+
+    const [reports, total, statusCounts] = await Promise.all([
+      collection
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize)
+        .toArray(),
+
+      collection.countDocuments(filter),
+
+      collection
+        .aggregate<{ _id: string; count: number }>([
+          {
+            $match: scopeFilter,
+          },
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray(),
+    ]);
+
+    const counts = {
+      total: statusCounts.reduce(
+        (sum, item) => sum + item.count,
+        0
+      ),
+      pending: 0,
+      investigating: 0,
+      resolved: 0,
+      dismissed: 0,
+    };
+
+    for (const item of statusCounts) {
+      if (item._id in counts && item._id !== "total") {
+        counts[item._id as keyof typeof counts] = item.count;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      reports,
+      counts,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_UNAUTHORIZED"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Administrator authentication required.",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_FORBIDDEN"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You do not have permission to access this resource.",
+        },
+        { status: 403 }
+      );
+    }
+
+    console.error("Admin user reports retrieval error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unable to retrieve user reports.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+========================================
+FILE: src/app/api/admin/user-reports/[id]/route.ts
+========================================
+
+import { connection, NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/admin-auth";
+import { hasPermission } from "@/lib/admin-permissions";
+import { getDatabase } from "@/lib/mongodb";
+
+const updateSchema = z
+  .object({
+    status: z
+      .enum(["pending", "investigating", "resolved", "dismissed"])
+      .optional(),
+    priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+    adminNote: z.string().trim().min(1).max(3000).optional(),
+    adminResponse: z.string().trim().min(1).max(3000).optional(),
+    resolution: z.string().trim().max(3000).nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (data) =>
+      data.status !== undefined ||
+      data.priority !== undefined ||
+      data.adminNote !== undefined ||
+      data.adminResponse !== undefined ||
+      data.resolution !== undefined,
+    { message: "At least one update is required." }
+  );
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+function hasReportAccessFilter(
+  admin: Awaited<ReturnType<typeof requireAdmin>>
+) {
+  const filter: Record<string, unknown> = {};
+
+  if (admin.role && !hasPermission(admin.role, "view_all_reports")) {
+    filter["assignedTo.adminId"] = admin.id;
+  }
+
+  return filter;
+}
+
+function canUpdateReport(
+  admin: Awaited<ReturnType<typeof requireAdmin>>,
+  permission: Parameters<typeof hasPermission>[1]
+) {
+  return admin.role !== null && hasPermission(admin.role, permission);
+}
+
+function forbiddenResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "You do not have permission to perform this action.",
+    },
+    { status: 403 }
+  );
+}
+
+function unauthorizedResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Administrator authentication required.",
+    },
+    { status: 401 }
+  );
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: RouteContext
+) {
+  await connection();
+
+  try {
+    const admin = await requireAdmin();
+
+    if (!admin.role) {
+      return forbiddenResponse();
+    }
+
+    const canViewAll = hasPermission(
+      admin.role,
+      "view_all_reports"
+    );
+
+    const canViewAssigned = hasPermission(
+      admin.role,
+      "view_assigned_reports"
+    );
+
+    if (!canViewAll && !canViewAssigned) {
+      return forbiddenResponse();
+    }
+
+    const { id } = await params;
+
+    if (!id || id.length > 100) {
+      return NextResponse.json(
+        { success: false, message: "Invalid report reference." },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    const report = await db.collection("userReports").findOne(
+      {
+        reportId: id,
+        ...hasReportAccessFilter(admin),
+      },
+      {
+        projection: { _id: 0 },
+      }
+    );
+
+    // Return 404 for reports that do not exist or are not assigned
+    // to the requesting Report Officer.
+    if (!report) {
+      return NextResponse.json(
+        { success: false, message: "Report not found." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      report,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_UNAUTHORIZED"
+    ) {
+      return unauthorizedResponse();
+    }
+
+    console.error("Admin report details error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to retrieve report details." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: RouteContext
+) {
+  await connection();
+
+  try {
+    const admin = await requireAdmin();
+
+    if (!admin.role) {
+      return forbiddenResponse();
+    }
+
+    const canViewAll = hasPermission(
+      admin.role,
+      "view_all_reports"
+    );
+
+    const canViewAssigned = hasPermission(
+      admin.role,
+      "view_assigned_reports"
+    );
+
+    if (!canViewAll && !canViewAssigned) {
+      return forbiddenResponse();
+    }
+
+    const { id } = await params;
+
+    if (!id || id.length > 100) {
+      return NextResponse.json(
+        { success: false, message: "Invalid report reference." },
+        { status: 400 }
+      );
+    }
+
+    const origin = request.headers.get("origin");
+
+    if (origin && origin !== request.nextUrl.origin) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request origin." },
+        { status: 403 }
+      );
+    }
+
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON request body." },
+        { status: 400 }
+      );
+    }
+
+    const validation = updateSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please check the update details.",
+          errors: validation.error.flatten(),
+        },
+        { status: 400 }
+      );
+    }
+
+    const data = validation.data;
+
+    // Check permissions for each requested operation.
+    if (data.status === "resolved" &&
+        !canUpdateReport(admin, "resolve_reports")) {
+      return forbiddenResponse();
+    }
+
+    if (data.status === "dismissed" &&
+        !canUpdateReport(admin, "dismiss_reports")) {
+      return forbiddenResponse();
+    }
+
+    if (
+      (data.status === "pending" ||
+        data.status === "investigating" ||
+        data.priority !== undefined) &&
+      !canUpdateReport(admin, "investigate_reports")
+    ) {
+      return forbiddenResponse();
+    }
+
+    if (
+      data.resolution !== undefined &&
+      !canUpdateReport(admin, "resolve_reports")
+    ) {
+      return forbiddenResponse();
+    }
+
+    if (
+      data.adminNote !== undefined &&
+      !canUpdateReport(admin, "add_internal_notes")
+    ) {
+      return forbiddenResponse();
+    }
+
+    if (
+      data.adminResponse !== undefined &&
+      !canUpdateReport(admin, "communicate_with_reporters")
+    ) {
+      return forbiddenResponse();
+    }
+
+    const db = await getDatabase();
+    const collection = db.collection("userReports");
+
+    // Scope the database lookup itself to the administrator's
+    // permitted reports. Report Officers cannot access other cases.
+    const reportFilter = {
+      reportId: id,
+      ...hasReportAccessFilter(admin),
+    };
+
+    const existingReport = await collection.findOne(reportFilter);
+
+    if (!existingReport) {
+      return NextResponse.json(
+        { success: false, message: "Report not found." },
+        { status: 404 }
+      );
+    }
+
+    const now = new Date();
+
+    const setFields: Record<string, unknown> = {
+      updatedAt: now,
+    };
+
+    if (data.status !== undefined) {
+      setFields.status = data.status;
+      setFields.resolvedAt =
+        data.status === "resolved" ? now : null;
+    }
+
+    if (data.priority !== undefined) {
+      setFields.priority = data.priority;
+    }
+
+    if (data.resolution !== undefined) {
+      setFields.resolution = data.resolution;
+    }
+
+    if (
+      data.status === "resolved" &&
+      data.resolution === undefined &&
+      !existingReport.resolution
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please provide resolution details before resolving this report.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const pushes: Record<string, unknown> = {};
+
+    if (data.adminNote) {
+      pushes.adminNotes = {
+        note: data.adminNote,
+        adminId: admin.id,
+        adminName: admin.name,
+        createdAt: now,
+      };
+    }
+
+    if (data.adminResponse) {
+      pushes.adminResponses = {
+        responseId: randomUUID(),
+        message: data.adminResponse,
+        adminId: admin.id,
+        adminName: admin.name,
+        createdAt: now,
+      };
+    }
+
+    const updateOperation: Record<string, unknown> = {
+      $set: setFields,
+    };
+
+    if (Object.keys(pushes).length > 0) {
+      updateOperation.$push = pushes;
+    }
+
+    // Keep the ownership condition in the update query as well.
+    // This prevents updating a report after it has been reassigned.
+    const updateResult = await collection.updateOne(
+      reportFilter,
+      updateOperation
+    );
+
+    if (updateResult.matchedCount === 0) {
+      return NextResponse.json(
+        { success: false, message: "Report not found." },
+        { status: 404 }
+      );
+    }
+
+    const updatedReport = await collection.findOne(
+      reportFilter,
+      { projection: { _id: 0 } }
+    );
+
+    if (!updatedReport) {
+      return NextResponse.json(
+        { success: false, message: "Report not found." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Report updated successfully.",
+      report: updatedReport,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_UNAUTHORIZED"
+    ) {
+      return unauthorizedResponse();
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_FORBIDDEN"
+    ) {
+      return forbiddenResponse();
+    }
+
+    console.error("Admin report update error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Unable to update this report." },
+      { status: 500 }
+    );
+  }
+}
+
+
+========================================
+FILE: src/app/api/admin/user-reports/[id]/assignment/route.ts
+========================================
+
+import {
+  connection,
+  NextRequest,
+  NextResponse,
+} from "next/server";
+import {
+  ClientSession,
+  ObjectId,
+} from "mongodb";
+import { z } from "zod";
+
+import { requireAdmin } from "@/lib/admin-auth";
+import { hasPermission } from "@/lib/admin-permissions";
+import {
+  getDatabase,
+  getMongoClient,
+} from "@/lib/mongodb";
+
+const assignmentSchema = z
+  .object({
+    adminId: z
+      .string()
+      .regex(/^[a-fA-F0-9]{24}$/, "Invalid administrator ID.")
+      .nullable(),
+  })
+  .strict();
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+type AdministratorDocument = {
+  _id: ObjectId;
+  name: string;
+  email: string;
+  status: "active" | "disabled";
+  role?: unknown;
+};
+
+type AssignmentOfficer = {
+  adminId: string;
+  name: string;
+  email: string;
+  assignedAt: Date;
+  assignedBy: {
+    adminId: string;
+    name: string;
+  };
+};
+
+type AssignmentResult = {
+  action: "assigned" | "reassigned" | "unassigned";
+  assignedTo: AssignmentOfficer | null;
+};
+
+class AssignmentError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AssignmentError";
+    this.status = status;
+  }
+}
+
+export async function GET() {
+  await connection();
+
+  try {
+    const admin = await requireAdmin();
+
+    if (
+      !admin.role ||
+      !hasPermission(admin.role, "assign_reports")
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "You do not have permission to view report officers.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    const officers = await db
+      .collection<AdministratorDocument>("administrators")
+      .find(
+        {
+          status: "active",
+          role: "report_officer",
+        },
+        {
+          projection: {
+            _id: 1,
+            name: 1,
+          },
+        }
+      )
+      .sort({ name: 1 })
+      .toArray();
+
+    return NextResponse.json({
+      success: true,
+      officers: officers.map((officer) => ({
+        adminId: officer._id.toString(),
+        name: officer.name,
+      })),
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_UNAUTHORIZED"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Administrator authentication required.",
+        },
+        { status: 401 }
+      );
+    }
+
+    console.error("Report officers lookup failed:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unable to retrieve report officers.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: RouteContext
+) {
+  await connection();
+
+  let session: ClientSession | undefined;
+
+  try {
+    const admin = await requireAdmin();
+
+    if (
+      !admin.role ||
+      !hasPermission(admin.role, "assign_reports")
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "You do not have permission to manage report assignments.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+
+    if (!id || id.length > 100) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid report reference.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const origin = request.headers.get("origin");
+
+    if (origin && origin !== request.nextUrl.origin) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request origin.",
+        },
+        { status: 403 }
+      );
+    }
+
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid JSON request body.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const validation = assignmentSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please provide a valid administrator ID or null.",
+          errors: validation.error.flatten(),
+        },
+        { status: 400 }
+      );
+    }
+
+    const { adminId } = validation.data;
+
+    const db = await getDatabase();
+    const client = await getMongoClient();
+
+    const activeSession = client.startSession();
+    session = activeSession;
+
+    const reports = db.collection("userReports");
+
+    const administrators =
+      db.collection<AdministratorDocument>("administrators");
+
+    const assignments = db.collection("reportAssignments");
+
+    const result = await activeSession.withTransaction<AssignmentResult>(
+      async () => {
+        const report = await reports.findOne(
+          { reportId: id },
+          { session: activeSession }
+        );
+
+        if (!report) {
+          throw new AssignmentError("Report not found.", 404);
+        }
+
+        const previousAssignee = report.assignedTo ?? null;
+
+        let newAssignee: AssignmentOfficer | null = null;
+
+        if (adminId !== null) {
+          const officer = await administrators.findOne(
+            {
+              _id: new ObjectId(adminId),
+              status: "active",
+              role: "report_officer",
+            },
+            { session: activeSession }
+          );
+
+          if (!officer) {
+            throw new AssignmentError(
+              "The selected administrator is not an active Report Officer.",
+              400
+            );
+          }
+
+          newAssignee = {
+            adminId: officer._id.toString(),
+            name: officer.name,
+            email: officer.email,
+            assignedAt: new Date(),
+            assignedBy: {
+              adminId: admin.id,
+              name: admin.name,
+            },
+          };
+        }
+
+        const previousAdminId =
+          previousAssignee &&
+          typeof previousAssignee.adminId === "string"
+            ? previousAssignee.adminId
+            : null;
+
+        if (previousAdminId === adminId) {
+          throw new AssignmentError(
+            "This report is already assigned to the selected officer.",
+            409
+          );
+        }
+
+        const now = new Date();
+
+        const action: AssignmentResult["action"] =
+          adminId === null
+            ? "unassigned"
+            : previousAdminId === null
+              ? "assigned"
+              : "reassigned";
+
+        const updateResult = await reports.updateOne(
+          { reportId: id },
+          {
+            $set: {
+              assignedTo: newAssignee,
+              updatedAt: now,
+            },
+          },
+          { session: activeSession }
+        );
+
+        if (updateResult.matchedCount !== 1) {
+          throw new AssignmentError(
+            "Unable to update the report assignment.",
+            409
+          );
+        }
+
+        await assignments.insertOne(
+          {
+            reportId: id,
+            action,
+            previousAssignee,
+            newAssignee,
+            performedBy: {
+              adminId: admin.id,
+              name: admin.name,
+            },
+            createdAt: now,
+          },
+          { session: activeSession }
+        );
+
+        return {
+          action,
+          assignedTo: newAssignee,
+        };
+      }
+    );
+
+    if (!result) {
+      throw new Error(
+        "Assignment transaction returned no result."
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message:
+        result.action === "assigned"
+          ? "Report assigned successfully."
+          : result.action === "reassigned"
+            ? "Report reassigned successfully."
+            : "Report unassigned successfully.",
+      assignment: result,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_UNAUTHORIZED"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Administrator authentication required.",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof AssignmentError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: error.message,
+        },
+        { status: error.status }
+      );
+    }
+
+    console.error("Report assignment error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unable to complete report assignment.",
+      },
+      { status: 500 }
+    );
+  } finally {
+    if (session) {
+      await session.endSession();
+    }
+  }
+}
+
+
+========================================
+FILE: src/app/api/user-reports/route.ts
+========================================
+import { randomUUID } from "node:crypto";
+import { connection, NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
+import { z } from "zod";
+import { getCurrentUser } from "@/lib/auth";
+import { getDatabase } from "@/lib/mongodb";
+
+const reportCategories = [
+  "Fraud or Scam",
+  "Suspicious Listing",
+  "User Misconduct",
+  "Misleading Information",
+  "Platform Issue",
+  "Other",
+] as const;
+
+const objectIdSchema = z.string().regex(/^[a-fA-F0-9]{24}$/, "Invalid reference ID.");
+
+const reportedEntitySchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("listing"),
+    id: objectIdSchema,
+  }),
+  z.object({
+    type: z.literal("user"),
+    id: objectIdSchema,
+  }),
+  z.object({
+    type: z.literal("platform"),
+  }),
+]);
+
+const reportSchema = z
+  .object({
+    category: z.enum(reportCategories),
+    subject: z.string().trim().min(3).max(120),
+    description: z.string().trim().min(10).max(3000),
+    reportedEntity: reportedEntitySchema.optional(),
+  })
+  .strict();
+
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 15 * 60 * 1000;
+
+let rateLimitIndexPromise: Promise<string> | null = null;
+
+async function checkRateLimit(userId: string) {
+  const db = await getDatabase();
+  const collection = db.collection<{ _id: string; userId: string; expiresAt: Date; count: number }>("userReportRateLimits");
+
+  rateLimitIndexPromise ??= collection.createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0 }
+  );
+
+  await rateLimitIndexPromise;
+
+  const now = new Date();
+  const windowStart = Math.floor(now.getTime() / RATE_WINDOW_MS);
+  const expiresAt = new Date((windowStart + 1) * RATE_WINDOW_MS);
+
+  const bucketId = `${userId}:${windowStart}`;
+
+  await collection.updateOne(
+    { _id: bucketId },
+    {
+      $setOnInsert: { userId, expiresAt },
+      $inc: { count: 1 },
+    },
+    { upsert: true }
+  );
+
+  const bucket = await collection.findOne({ _id: bucketId });
+  const count = Number(bucket?.count ?? 0);
+
+  return {
+    allowed: count <= RATE_LIMIT,
+    retryAfter: Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)),
+  };
+}
+
+function getEntityOwnerId(entity: Record<string, unknown>) {
+  const owner =
+    entity.userId ??
+    entity.sellerId ??
+    entity.ownerId ??
+    entity.createdBy;
+
+  if (owner instanceof ObjectId) {
+    return owner.toString();
+  }
+
+  return typeof owner === "string" ? owner : null;
+}
+
+export async function POST(request: NextRequest) {
+  await connection();
+
+  try {
+    const origin = request.headers.get("origin");
+
+    if (origin && origin !== request.nextUrl.origin) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request origin." },
+        { status: 403 }
+      );
+    }
+
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Please sign in to submit a report." },
+        { status: 401 }
+      );
+    }
+
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON request body." },
+        { status: 400 }
+      );
+    }
+
+    const validation = reportSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please check the report details and try again.",
+          errors: validation.error.flatten(),
+        },
+        { status: 400 }
+      );
+    }
+
+    const data = validation.data;
+    const db = await getDatabase();
+
+    let reportedEntity: Record<string, unknown> | null = null;
+
+    if (data.reportedEntity?.type === "user") {
+      const targetId = data.reportedEntity.id;
+
+      if (targetId === user.id) {
+        return NextResponse.json(
+          { success: false, message: "You cannot report your own account." },
+          { status: 400 }
+        );
+      }
+
+      const targetUser = await db.collection("users").findOne(
+        { _id: new ObjectId(targetId) },
+        { projection: { _id: 1 } }
+      );
+
+      if (!targetUser) {
+        return NextResponse.json(
+          { success: false, message: "The reported user could not be found." },
+          { status: 404 }
+        );
+      }
+
+      reportedEntity = {
+        type: "user",
+        id: targetId,
+      };
+    } else if (data.reportedEntity?.type === "listing") {
+      const targetId = data.reportedEntity.id;
+
+      const listing = await db.collection("listings").findOne({
+        _id: new ObjectId(targetId),
+      });
+
+      if (!listing) {
+        return NextResponse.json(
+          { success: false, message: "The reported listing could not be found." },
+          { status: 404 }
+        );
+      }
+
+      const ownerId = getEntityOwnerId(listing as Record<string, unknown>);
+
+      if (ownerId === user.id) {
+        return NextResponse.json(
+          { success: false, message: "You cannot report your own listing." },
+          { status: 400 }
+        );
+      }
+
+      reportedEntity = {
+        type: "listing",
+        id: targetId,
+        label:
+          typeof listing.title === "string"
+            ? listing.title
+            : "Marketplace listing",
+      };
+    } else if (data.reportedEntity?.type === "platform") {
+      reportedEntity = { type: "platform" };
+    }
+
+    const rateLimit = await checkRateLimit(user.id);
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You have submitted too many reports. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfter) },
+        }
+      );
+    }
+
+    const now = new Date();
+    const reportId = randomUUID();
+    const referenceNumber = `AGR-${now.getFullYear()}-${randomUUID()
+      .slice(0, 8)
+      .toUpperCase()}`;
+
+    const report = {
+      reportId,
+      referenceNumber,
+      reporter: {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      category: data.category,
+      subject: data.subject,
+      description: data.description,
+      reportedEntity,
+      evidence: [],
+      status: "pending",
+      priority: "medium",
+      adminNotes: [],
+      adminResponses: [],
+      resolution: null,
+      createdAt: now,
+      updatedAt: now,
+      resolvedAt: null,
+    };
+
+    await db.collection("userReports").insertOne(report);
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Your report has been submitted successfully.",
+        report: {
+          reportId,
+          referenceNumber,
+          status: "pending",
+          createdAt: now,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("User report submission error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "An unexpected error occurred while submitting your report." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  await connection();
+
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Please sign in to view your reports." },
+        { status: 401 }
+      );
+    }
+
+    const pageParam = Number(request.nextUrl.searchParams.get("page") ?? "1");
+    const page = Number.isFinite(pageParam)
+      ? Math.max(1, Math.floor(pageParam))
+      : 1;
+
+    const pageSize = 10;
+    const db = await getDatabase();
+    const collection = db.collection("userReports");
+
+    const filter = { "reporter.userId": user.id };
+
+    const [reports, total] = await Promise.all([
+      collection
+        .find(filter, {
+          projection: {
+            _id: 0,
+            reportId: 1,
+            referenceNumber: 1,
+            category: 1,
+            subject: 1,
+            description: 1,
+            reportedEntity: 1,
+            status: 1,
+            priority: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            resolvedAt: 1,
+            adminResponses: 1,
+          },
+        })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize)
+        .toArray(),
+      collection.countDocuments(filter),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      reports,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error("User reports retrieval error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "An unexpected error occurred while retrieving your reports." },
+      { status: 500 }
+    );
+  }
+}
+
+
+========================================
+FILE: src/app/api/user-reports/[id]/messages/route.ts
+========================================
+
+import { connection, NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { getCurrentUser } from "@/lib/auth";
+import { getCurrentAdmin } from "@/lib/admin-auth";
+import { hasPermission } from "@/lib/admin-permissions";
+import { getDatabase } from "@/lib/mongodb";
+import { sendReportMessageEmail } from "@/lib/email";
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+const messageSchema = z
+  .object({
+    message: z.string().trim().min(1).max(3000),
+  })
+  .strict();
+
+type MessageDocument = {
+  messageId: string;
+  reportId: string;
+  senderType: "user" | "admin";
+  senderId: string;
+  senderName: string;
+  senderEmail: string;
+  message: string;
+  createdAt: Date;
+};
+
+const MESSAGE_RATE_LIMIT = 10;
+const MESSAGE_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+let indexesPromise: Promise<void> | null = null;
+
+function ensureMessageIndexes(
+  db: Awaited<ReturnType<typeof getDatabase>>
+): Promise<void> {
+  if (!indexesPromise) {
+    indexesPromise = Promise.all([
+      db.collection("reportMessages").createIndex(
+        { reportId: 1, createdAt: 1 },
+        { name: "report_messages_conversation" }
+      ),
+
+      db.collection("reportMessageRateLimits").createIndex(
+        { senderType: 1, senderId: 1, windowStart: 1 },
+        {
+          unique: true,
+          name: "report_message_rate_limit_unique",
+        }
+      ),
+
+      db.collection("reportMessageRateLimits").createIndex(
+        { expiresAt: 1 },
+        {
+          expireAfterSeconds: 0,
+          name: "report_message_rate_limit_ttl",
+        }
+      ),
+    ]).then(() => undefined).catch((error) => {
+      indexesPromise = null;
+      throw error;
+    });
+  }
+
+  return indexesPromise;
+}
+
+async function consumeMessageRateLimit(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  senderType: "user" | "admin",
+  senderId: string,
+  now: Date
+): Promise<boolean> {
+  const windowStart = new Date(
+    Math.floor(now.getTime() / MESSAGE_RATE_WINDOW_MS) *
+      MESSAGE_RATE_WINDOW_MS
+  );
+
+  const expiresAt = new Date(
+    windowStart.getTime() +
+      MESSAGE_RATE_WINDOW_MS +
+      60 * 60 * 1000
+  );
+
+  const collection = db.collection("reportMessageRateLimits");
+
+  const filter = {
+    senderType,
+    senderId,
+    windowStart,
+  };
+
+  try {
+    await collection.updateOne(
+      filter,
+      {
+        $inc: { count: 1 },
+        $setOnInsert: { expiresAt },
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    // Handle simultaneous first messages creating the same
+    // rate-limit record.
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === 11000
+    ) {
+      await collection.updateOne(
+        filter,
+        { $inc: { count: 1 } }
+      );
+    } else {
+      throw error;
+    }
+  }
+
+  const record = await collection.findOne(filter);
+
+  return (
+    typeof record?.count === "number" &&
+    record.count <= MESSAGE_RATE_LIMIT
+  );
+}
+
+function unauthorizedResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Authentication required.",
+    },
+    { status: 401 }
+  );
+}
+
+function forbiddenResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      message:
+        "You do not have permission to access this conversation.",
+    },
+    { status: 403 }
+  );
+}
+
+function invalidOriginResponse(request: NextRequest) {
+  const origin = request.headers.get("origin");
+
+  if (origin && origin !== request.nextUrl.origin) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Invalid request origin.",
+      },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
+
+function canAdminAccessMessages(
+  admin: NonNullable<Awaited<ReturnType<typeof getCurrentAdmin>>>
+) {
+  return (
+    admin.role !== null &&
+    hasPermission(admin.role, "view_all_reports") &&
+    hasPermission(admin.role, "communicate_with_reporters")
+  );
+}
+
+async function notifyConversationParticipants(
+  report: {
+    reportId: string;
+    referenceNumber: string;
+    reporter: {
+      name?: string;
+      email?: string;
+    };
+  },
+  message: MessageDocument,
+  adminSender: boolean
+) {
+  try {
+    const db = await getDatabase();
+
+    if (adminSender) {
+      const reporterEmail = report.reporter?.email;
+
+      if (!reporterEmail) {
+        console.warn(
+          "Report notification skipped: reporter email is unavailable."
+        );
+        return;
+      }
+
+      const result = await sendReportMessageEmail({
+        to: reporterEmail,
+        recipientName: report.reporter.name || "Reporter",
+        senderName: message.senderName,
+        senderType: "admin",
+        referenceNumber: report.referenceNumber,
+        message: message.message,
+      });
+
+      if (!result.success) {
+        console.error(
+          "Reporter notification email failed:",
+          result.error
+        );
+      }
+
+      return;
+    }
+
+    const administrators = await db
+      .collection("administrators")
+      .find(
+        {
+          status: "active",
+          role: {
+            $in: ["super_admin", "report_manager"],
+          },
+          email: {
+            $type: "string",
+            $ne: "",
+          },
+        },
+        {
+          projection: {
+            _id: 0,
+            name: 1,
+            email: 1,
+          },
+        }
+      )
+      .toArray();
+
+    await Promise.all(
+      administrators
+        .filter(
+          (administrator) =>
+            typeof administrator.email === "string" &&
+            administrator.email.trim().length > 0
+        )
+        .map(async (administrator) => {
+          const result = await sendReportMessageEmail({
+            to: String(administrator.email),
+            recipientName: String(
+              administrator.name || "Administrator"
+            ),
+            senderName: message.senderName,
+            senderType: "user",
+            referenceNumber: report.referenceNumber,
+            message: message.message,
+          });
+
+          if (!result.success) {
+            console.error(
+              "Administrator notification email failed:",
+              result.error
+            );
+          }
+        })
+    );
+  } catch (error) {
+    // A notification failure must never undo a saved message.
+    console.error(
+      "Report conversation notification error:",
+      error
+    );
+  }
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: RouteContext
+) {
+  await connection();
+
+  try {
+    const { id } = await params;
+
+    if (!id || id.length > 100) {
+      return NextResponse.json(
+        { success: false, message: "Invalid report reference." },
+        { status: 400 }
+      );
+    }
+
+    const admin = await getCurrentAdmin();
+    const user = admin ? null : await getCurrentUser();
+
+    if (!admin && !user) {
+      return unauthorizedResponse();
+    }
+
+    if (admin && !canAdminAccessMessages(admin)) {
+      return forbiddenResponse();
+    }
+
+    const db = await getDatabase();
+
+    await ensureMessageIndexes(db);
+
+    const reportFilter = admin
+      ? { reportId: id }
+      : {
+          reportId: id,
+          "reporter.userId": user!.id,
+        };
+
+    const report = await db.collection("userReports").findOne(
+      reportFilter,
+      {
+        projection: {
+          _id: 0,
+          reportId: 1,
+        },
+      }
+    );
+
+    if (!report) {
+      return NextResponse.json(
+        { success: false, message: "Report not found." },
+        { status: 404 }
+      );
+    }
+
+    const messages = await db
+      .collection<MessageDocument>("reportMessages")
+      .find({ reportId: id })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray();
+
+    return NextResponse.json({
+      success: true,
+      messages: messages.reverse(),
+    });
+  } catch (error) {
+    console.error("Report messages retrieval error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unable to retrieve this conversation.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: RouteContext
+) {
+  await connection();
+
+  try {
+    const originError = invalidOriginResponse(request);
+
+    if (originError) {
+      return originError;
+    }
+
+    const { id } = await params;
+
+    if (!id || id.length > 100) {
+      return NextResponse.json(
+        { success: false, message: "Invalid report reference." },
+        { status: 400 }
+      );
+    }
+
+    const admin = await getCurrentAdmin();
+    const user = admin ? null : await getCurrentUser();
+
+    if (!admin && !user) {
+      return unauthorizedResponse();
+    }
+
+    if (admin && !canAdminAccessMessages(admin)) {
+      return forbiddenResponse();
+    }
+
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid JSON request body.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const validation = messageSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Enter a message between 1 and 3,000 characters.",
+          errors: validation.error.flatten(),
+        },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    await ensureMessageIndexes(db);
+
+    const reportFilter = admin
+      ? { reportId: id }
+      : {
+          reportId: id,
+          "reporter.userId": user!.id,
+        };
+
+    const report = await db.collection("userReports").findOne(
+      reportFilter,
+      {
+        projection: {
+          _id: 0,
+          reportId: 1,
+          referenceNumber: 1,
+          reporter: 1,
+        },
+      }
+    );
+
+    if (!report) {
+      return NextResponse.json(
+        { success: false, message: "Report not found." },
+        { status: 404 }
+      );
+    }
+
+    const now = new Date();
+
+    const senderType = admin ? "admin" : "user";
+    const senderId = admin ? admin.id : user!.id;
+
+    const withinLimit = await consumeMessageRateLimit(
+      db,
+      senderType,
+      senderId,
+      now
+    );
+
+    if (!withinLimit) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "You have sent too many messages. Please try again after 15 minutes.",
+        },
+        { status: 429 }
+      );
+    }
+
+    const newMessage: MessageDocument = {
+      messageId: randomUUID(),
+      reportId: id,
+      senderType,
+      senderId,
+      senderName: admin ? admin.name : user!.name,
+      senderEmail: admin ? admin.email : user!.email,
+      message: validation.data.message,
+      createdAt: now,
+    };
+
+    await db
+      .collection<MessageDocument>("reportMessages")
+      .insertOne(newMessage);
+
+    await db.collection("userReports").updateOne(
+      { reportId: id },
+      {
+        $set: {
+          updatedAt: now,
+        },
+      }
+    );
+
+    // Email notifications are best-effort.
+    // Message storage does not depend on email delivery.
+    await notifyConversationParticipants(
+      {
+        reportId: report.reportId,
+        referenceNumber: report.referenceNumber,
+        reporter: report.reporter,
+      },
+      newMessage,
+      Boolean(admin)
+    );
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Message sent successfully.",
+        newMessage,
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Report message sending error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unable to send your message. Please try again.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+========================================
+FILE: src/lib/admin-auth.ts
+========================================
+
+import "server-only";
+
+import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import { ObjectId } from "mongodb";
+import { getDatabase } from "@/lib/mongodb";
+import {
+  type AdminPermission,
+  type AdminRole,
+  hasPermission,
+  isAdminRole,
+} from "@/lib/admin-permissions";
+
+const ADMIN_COOKIE_NAME = "agrivanta_admin_session";
+const ADMIN_SESSION_DURATION = 60 * 60 * 8;
+
+export type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  status: "active" | "disabled";
+  role: AdminRole | null;
+  createdAt?: Date;
+};
+
+type AdminDocument = {
+  _id: ObjectId;
+  name: string;
+  email: string;
+  passwordHash: string;
+  status: "active" | "disabled";
+  role?: unknown;
+  createdAt?: Date;
+};
+
+function getAdminSecret() {
+  const secret = process.env.ADMIN_AUTH_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "ADMIN_AUTH_SECRET must contain at least 32 characters."
+    );
+  }
+
+  return new TextEncoder().encode(secret);
+}
+
+function isValidAdminId(id: string) {
+  return /^[a-fA-F0-9]{24}$/.test(id);
+}
+
+export async function hashAdminPassword(password: string) {
+  const passwordBytes = new TextEncoder().encode(password).length;
+
+  if (password.length < 12 || passwordBytes > 72) {
+    throw new Error(
+      "Administrator passwords must contain at least 12 characters and not exceed 72 UTF-8 bytes."
+    );
+  }
+
+  return bcrypt.hash(password, 12);
+}
+
+export async function verifyAdminPassword(
+  password: string,
+  passwordHash: string
+) {
+  return bcrypt.compare(password, passwordHash);
+}
+
+export async function createAdminSession(admin: AdminUser) {
+  if (!isValidAdminId(admin.id) || admin.status !== "active") {
+    throw new Error("Invalid administrator account.");
+  }
+
+  const token = await new SignJWT({
+    type: "admin",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(admin.id)
+    .setIssuedAt()
+    .setExpirationTime(`${ADMIN_SESSION_DURATION}s`)
+    .sign(getAdminSecret());
+
+  const cookieStore = await cookies();
+
+  cookieStore.set(ADMIN_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: ADMIN_SESSION_DURATION,
+  });
+}
+
+export async function destroyAdminSession() {
+  const cookieStore = await cookies();
+
+  cookieStore.set(ADMIN_COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+async function getAdminSessionId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, getAdminSecret(), {
+      algorithms: ["HS256"],
+    });
+
+    if (
+      payload.type !== "admin" ||
+      typeof payload.sub !== "string" ||
+      !isValidAdminId(payload.sub)
+    ) {
+      return null;
+    }
+
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCurrentAdmin(): Promise<AdminUser | null> {
+  const adminId = await getAdminSessionId();
+
+  if (!adminId) return null;
+
+  try {
+    const db = await getDatabase();
+
+    const admin = await db
+      .collection<AdminDocument>("administrators")
+      .findOne({
+        _id: new ObjectId(adminId),
+        status: "active",
+      });
+
+    if (!admin) return null;
+
+    return {
+      id: admin._id.toString(),
+      name: admin.name,
+      email: admin.email,
+      status: admin.status,
+      role: isAdminRole(admin.role) ? admin.role : null,
+      createdAt: admin.createdAt,
+    };
+  } catch (error) {
+    console.error("Administrator lookup failed:", error);
+    return null;
+  }
+}
+
+export async function requireAdmin(): Promise<AdminUser> {
+  const admin = await getCurrentAdmin();
+
+  if (!admin) {
+    throw new Error("ADMIN_UNAUTHORIZED");
+  }
+
+  return admin;
+}
+
+export async function requireAdminPermission(
+  permission: AdminPermission
+): Promise<AdminUser> {
+  const admin = await requireAdmin();
+
+  if (!admin.role || !hasPermission(admin.role, permission)) {
+    throw new Error("ADMIN_FORBIDDEN");
+  }
+
+  return admin;
+}
+
+
+========================================
+FILE: src/lib/admin-permissions.ts
+========================================
+export const ADMIN_ROLES = [
+  "super_admin",
+  "report_manager",
+  "report_officer",
+] as const;
+
+export type AdminRole = (typeof ADMIN_ROLES)[number];
+
+export const ADMIN_PERMISSIONS = [
+  "manage_administrators",
+  "manage_platform_settings",
+  "manage_users",
+  "manage_listings",
+  "manage_news",
+  "manage_agricultural_reports",
+  "view_platform_analytics",
+  "view_all_reports",
+  "view_assigned_reports",
+  "assign_reports",
+  "investigate_reports",
+  "communicate_with_reporters",
+  "add_internal_notes",
+  "resolve_reports",
+  "dismiss_reports",
+  "view_report_analytics",
+] as const;
+
+export type AdminPermission =
+  (typeof ADMIN_PERMISSIONS)[number];
+
+export const ROLE_PERMISSIONS: Record<
+  AdminRole,
+  readonly AdminPermission[]
+> = {
+  super_admin: ADMIN_PERMISSIONS,
+  report_manager: [
+    "view_all_reports",
+    "assign_reports",
+    "investigate_reports",
+    "communicate_with_reporters",
+    "add_internal_notes",
+    "resolve_reports",
+    "dismiss_reports",
+    "view_report_analytics",
+  ],
+  report_officer: [
+    "view_assigned_reports",
+    "investigate_reports",
+    "communicate_with_reporters",
+    "add_internal_notes",
+  ],
+};
+
+export const ROLE_LABELS: Record<AdminRole, string> = {
+  super_admin: "Super Admin",
+  report_manager: "Report Manager",
+  report_officer: "Report Officer",
+};
+
+export function isAdminRole(value: unknown): value is AdminRole {
+  return (
+    typeof value === "string" &&
+    ADMIN_ROLES.some((role) => role === value)
+  );
+}
+
+export function getRolePermissions(
+  role: AdminRole
+): readonly AdminPermission[] {
+  return ROLE_PERMISSIONS[role];
+}
+
+export function hasPermission(
+  role: AdminRole,
+  permission: AdminPermission
+): boolean {
+  return ROLE_PERMISSIONS[role].includes(permission);
+}
+
+export function hasAnyPermission(
+  role: AdminRole,
+  permissions: readonly AdminPermission[]
+): boolean {
+  return permissions.some((permission) =>
+    hasPermission(role, permission)
+  );
+}
+
+export function hasAllPermissions(
+  role: AdminRole,
+  permissions: readonly AdminPermission[]
+): boolean {
+  return permissions.every((permission) =>
+    hasPermission(role, permission)
+  );
+}
+
+
+========================================
+FILE: src/app/admin/user-reports/page.tsx
+========================================
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  AlertTriangle,
+  Search,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  ShieldAlert,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  CalendarDays,
+  UserRound,
+  FileText,
+} from "lucide-react";
+
+type ReportStatus =
+  | "pending"
+  | "investigating"
+  | "resolved"
+  | "dismissed";
+
+type Report = {
+  reportId: string;
+  referenceNumber: string;
+  reporter: {
+    userId: string;
+    name: string;
+    email: string;
+    role?: string;
+  };
+  category: string;
+  subject: string;
+  description: string;
+  reportedEntity: {
+    type: "listing" | "user" | "platform";
+    id?: string;
+    label?: string;
+  } | null;
+  status: ReportStatus;
+  priority: "low" | "medium" | "high" | "urgent";
+  createdAt: string;
+  updatedAt: string;
+};
+
+type Pagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+type Counts = {
+  total: number;
+  pending: number;
+  investigating: number;
+  resolved: number;
+  dismissed: number;
+};
+
+const categories = [
+  "Fraud or Scam",
+  "Suspicious Listing",
+  "User Misconduct",
+  "Misleading Information",
+  "Platform Issue",
+  "Other",
+];
+
+const statusOptions = [
+  { label: "All statuses", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "Investigating", value: "investigating" },
+  { label: "Resolved", value: "resolved" },
+  { label: "Dismissed", value: "dismissed" },
+];
+
+const emptyCounts: Counts = {
+  total: 0,
+  pending: 0,
+  investigating: 0,
+  resolved: 0,
+  dismissed: 0,
+};
+
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Not available";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function statusStyle(status: ReportStatus) {
+  const styles: Record<ReportStatus, string> = {
+    pending: "bg-amber-50 text-amber-700 border-amber-200",
+    investigating: "bg-blue-50 text-blue-700 border-blue-200",
+    resolved: "bg-green-50 text-green-700 border-green-200",
+    dismissed: "bg-gray-100 text-gray-600 border-gray-200",
+  };
+
+  return styles[status] ?? styles.pending;
+}
+
+function priorityStyle(priority: string) {
+  const styles: Record<string, string> = {
+    low: "bg-gray-100 text-gray-600",
+    medium: "bg-blue-50 text-blue-700",
+    high: "bg-orange-50 text-orange-700",
+    urgent: "bg-red-50 text-red-700",
+  };
+
+  return styles[priority] ?? styles.medium;
+}
+
+function formatStatus(status: string) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+export default function AdminUserReportsPage() {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [counts, setCounts] = useState<Counts>(emptyCounts);
+  const [pagination, setPagination] = useState<Pagination>({
+    page: 1,
+    pageSize: 15,
+    total: 0,
+    totalPages: 0,
+  });
+
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadReports = useCallback(async (page: number) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        status,
+        category,
+        search: search.trim(),
+      });
+
+      const response = await fetch(
+        `/api/admin/user-reports?${params.toString()}`,
+        {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        window.location.assign("/admin/login");
+        return;
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to load reports.");
+      }
+
+      setReports(data.reports ?? []);
+      setCounts(data.counts ?? emptyCounts);
+      setPagination(data.pagination);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading reports."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [status, category, search]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadReports(1);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [loadReports]);
+
+  return (
+    <main className="min-h-screen bg-[#F7F8F4] text-[#26372b]">
+      <header className="border-b border-[#e5e9e1] bg-white">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-5 py-5 sm:px-8">
+          <Link
+            href="/admin"
+            aria-label="Back to administrator dashboard"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#e5e9e1] text-[#52624f] transition hover:bg-[#f2f5ef]"
+          >
+            <ArrowLeft size={19} />
+          </Link>
+
+          <div>
+            <p className="text-lg font-extrabold text-[#17472D]">
+              AgriVanta
+            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#899487]">
+              Administrator / User Reports
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
+        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#74816f]">
+              <ShieldAlert size={16} />
+              Platform administration
+            </div>
+
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#17472D] sm:text-3xl">
+              User Reports
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm text-[#7c8879]">
+              Review user complaints, investigate suspicious activity and
+              manage reports submitted by the AgriVanta community.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void loadReports(pagination.page)}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-[#dfe7dc] bg-white px-4 py-2.5 text-xs font-bold text-[#42634a] transition hover:bg-[#f2f5ef] disabled:opacity-50 sm:self-auto"
+          >
+            <RefreshCw
+              size={15}
+              className={loading ? "animate-spin" : ""}
+            />
+            Refresh reports
+          </button>
+        </div>
+
+        <section className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#899487]">
+                Total reports
+              </p>
+              <FileText size={19} className="text-[#17472D]" />
+            </div>
+            <p className="mt-3 text-3xl font-extrabold text-[#17472D]">
+              {counts.total}
+            </p>
+            <p className="mt-1 text-xs text-[#899487]">All submissions</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#899487]">
+                Pending
+              </p>
+              <Clock size={19} className="text-amber-600" />
+            </div>
+            <p className="mt-3 text-3xl font-extrabold text-amber-600">
+              {counts.pending}
+            </p>
+            <p className="mt-1 text-xs text-[#899487]">Awaiting review</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#899487]">
+                Investigating
+              </p>
+              <AlertTriangle size={19} className="text-blue-600" />
+            </div>
+            <p className="mt-3 text-3xl font-extrabold text-blue-600">
+              {counts.investigating}
+            </p>
+            <p className="mt-1 text-xs text-[#899487]">Under investigation</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#899487]">
+                Resolved
+              </p>
+              <CheckCircle2 size={19} className="text-green-700" />
+            </div>
+            <p className="mt-3 text-3xl font-extrabold text-green-700">
+              {counts.resolved}
+            </p>
+            <p className="mt-1 text-xs text-[#899487]">Successfully resolved</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#899487]">
+                Dismissed
+              </p>
+              <XCircle size={19} className="text-gray-500" />
+            </div>
+            <p className="mt-3 text-3xl font-extrabold text-gray-600">
+              {counts.dismissed}
+            </p>
+            <p className="mt-1 text-xs text-[#899487]">Closed reports</p>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-[#e5e9e1] bg-white">
+          <div className="border-b border-[#e5e9e1] p-5 sm:p-6">
+            <div className="mb-5">
+              <h2 className="text-base font-bold text-[#26372b]">
+                Submitted reports
+              </h2>
+              <p className="mt-1 text-xs text-[#899487]">
+                Search and review reports submitted by registered users.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="relative md:col-span-1">
+                <Search
+                  size={17}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#899487]"
+                />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search reference, subject or reporter..."
+                  className="w-full rounded-xl border border-[#dfe7dc] bg-[#fbfcfa] py-3 pl-10 pr-4 text-xs text-[#26372b] outline-none transition placeholder:text-[#a0aa9b] focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                />
+              </div>
+
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                className="rounded-xl border border-[#dfe7dc] bg-[#fbfcfa] px-3 py-3 text-xs text-[#52624f] outline-none focus:border-[#17472D]"
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="rounded-xl border border-[#dfe7dc] bg-[#fbfcfa] px-3 py-3 text-xs text-[#52624f] outline-none focus:border-[#17472D]"
+              >
+                <option value="all">All categories</option>
+                {categories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {error && (
+            <div className="m-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold">Unable to load reports</p>
+                <p className="mt-1 text-xs">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadReports(pagination.page)}
+                  className="mt-2 text-xs font-bold underline"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left">
+              <thead className="bg-[#f8faf6]">
+                <tr className="border-b border-[#e5e9e1]">
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Report
+                  </th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Reporter
+                  </th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Category
+                  </th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Priority
+                  </th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Status
+                  </th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Submitted
+                  </th>
+                  <th className="px-5 py-4 text-right text-[10px] font-bold uppercase tracking-wider text-[#899487]">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-[#edf0ea]">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-16 text-center">
+                      <RefreshCw
+                        size={22}
+                        className="mx-auto animate-spin text-[#17472D]"
+                      />
+                      <p className="mt-3 text-xs text-[#899487]">
+                        Loading reports...
+                      </p>
+                    </td>
+                  </tr>
+                ) : reports.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-16 text-center">
+                      <ShieldAlert
+                        size={30}
+                        className="mx-auto text-[#b5beb1]"
+                      />
+                      <p className="mt-3 text-sm font-bold text-[#52624f]">
+                        No reports found
+                      </p>
+                      <p className="mt-1 text-xs text-[#899487]">
+                        Reports matching your filters will appear here.
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  reports.map((report) => (
+                    <tr
+                      key={report.reportId}
+                      className="transition hover:bg-[#fbfcfa]"
+                    >
+                      <td className="px-5 py-4">
+                        <p className="text-xs font-bold text-[#17472D]">
+                          {report.referenceNumber}
+                        </p>
+                        <p className="mt-1 max-w-[220px] truncate text-xs font-semibold text-[#26372b]">
+                          {report.subject}
+                        </p>
+                        <p className="mt-1 text-[10px] text-[#899487]">
+                          {report.reportedEntity?.type
+                            ? `Target: ${report.reportedEntity.type}`
+                            : "General report"}
+                        </p>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <UserRound
+                            size={16}
+                            className="shrink-0 text-[#899487]"
+                          />
+                          <div>
+                            <p className="text-xs font-semibold text-[#26372b]">
+                              {report.reporter?.name || "Unknown user"}
+                            </p>
+                            <p className="mt-1 text-[10px] text-[#899487]">
+                              {report.reporter?.email || "No email"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span className="text-xs text-[#52624f]">
+                          {report.category}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase ${priorityStyle(report.priority)}`}
+                        >
+                          {report.priority}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-bold ${statusStyle(report.status)}`}
+                        >
+                          {formatStatus(report.status)}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1.5 text-xs text-[#52624f]">
+                          <CalendarDays size={13} className="text-[#899487]" />
+                          {formatDate(report.createdAt)}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-right">
+                        <Link
+                          href={`/admin/user-reports/${encodeURIComponent(report.reportId)}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#17472D] px-3 py-2 text-[10px] font-bold text-white transition hover:bg-[#103a23]"
+                        >
+                          Investigate
+                          <ExternalLink size={12} />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col justify-between gap-3 border-t border-[#e5e9e1] px-5 py-4 sm:flex-row sm:items-center">
+            <p className="text-xs text-[#899487]">
+              Showing{" "}
+              <span className="font-bold text-[#52624f]">
+                {reports.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-bold text-[#52624f]">
+                {pagination.total}
+              </span>{" "}
+              reports
+            </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={loading || pagination.page <= 1}
+                onClick={() => void loadReports(pagination.page - 1)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#dfe7dc] text-[#52624f] transition hover:bg-[#f2f5ef] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={17} />
+              </button>
+
+              <span className="px-2 text-xs font-semibold text-[#52624f]">
+                Page {pagination.page} of {Math.max(1, pagination.totalPages)}
+              </span>
+
+              <button
+                type="button"
+                disabled={
+                  loading ||
+                  pagination.page >= pagination.totalPages
+                }
+                onClick={() => void loadReports(pagination.page + 1)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#dfe7dc] text-[#52624f] transition hover:bg-[#f2f5ef] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Next page"
+              >
+                <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <p className="mt-5 text-center text-[11px] text-[#9aa395]">
+          AgriVanta Administration · User Reports Management
+        </p>
+      </div>
+    </main>
+  );
+}

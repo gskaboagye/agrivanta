@@ -1,0 +1,16 @@
+﻿C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\admin\user-reports\[id]\page.backup.tsx:153: `/api/admin/user-reports/${encodeURIComponent(reportId)}/assignment`;
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\admin\user-reports\[id]\page.tsx:153: `/api/admin/user-reports/${encodeURIComponent(reportId)}/assignment`;
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\[id]\assignment\route.ts:75: !hasPermission(admin.role, "assign_reports")
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\[id]\assignment\route.ts:94: role: "report_officer",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\[id]\assignment\route.ts:152: !hasPermission(admin.role, "assign_reports")
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\[id]\assignment\route.ts:251: role: "report_officer",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\[id]\route.ts:93: "view_assigned_reports"
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\[id]\route.ts:171: "view_assigned_reports"
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\app\api\admin\user-reports\route.ts:48: "view_assigned_reports"
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:4: "report_officer",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:18: "view_assigned_reports",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:19: "assign_reports",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:38: "assign_reports",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:46: report_officer: [
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:47: "view_assigned_reports",
+C:\Users\bm\Desktop\Agric Project\agrivanta\src\lib\admin-permissions.ts:57: report_officer: "Report Officer",

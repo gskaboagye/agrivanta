@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import {
@@ -22,9 +22,6 @@ import {
   AlertTriangle,
   MessageSquare,
   ClipboardList,
-  UserCheck,
-  UserMinus,
-  UserPlus,
 } from "lucide-react";
 
 type ReportStatus =
@@ -48,21 +45,6 @@ type AdminResponse = {
   createdAt: string;
 };
 
-type AssignedOfficer = {
-  adminId: string;
-  name: string;
-  email?: string;
-  assignedAt?: string;
-  assignedBy?: {
-    adminId: string;
-    name: string;
-  };
-};
-
-type ReportOfficer = {
-  adminId: string;
-  name: string;
-};
 
 type Report = {
   reportId: string;
@@ -87,7 +69,6 @@ type Report = {
   adminNotes: AdminNote[];
   adminResponses?: AdminResponse[];
   resolution: string | null;
-  assignedTo?: AssignedOfficer | null;
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
@@ -137,20 +118,11 @@ function AdminUserReportDetailsContent() {
   const [adminResponse, setAdminResponse] = useState("");
   const [resolution, setResolution] = useState("");
 
-  const [officers, setOfficers] = useState<ReportOfficer[]>([]);
-  const [selectedOfficerId, setSelectedOfficerId] = useState("");
-  const [canManageAssignments, setCanManageAssignments] = useState(false);
-  const [assignmentLoading, setAssignmentLoading] = useState(false);
-  const [savingAssignment, setSavingAssignment] = useState(false);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingResponse, setSendingResponse] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
-  const assignmentEndpoint =
-    `/api/admin/user-reports/${encodeURIComponent(reportId)}/assignment`;
 
   const loadReport = useCallback(async () => {
     setLoading(true);
@@ -183,45 +155,6 @@ function AdminUserReportDetailsContent() {
       setStatus(loadedReport.status);
       setPriority(loadedReport.priority);
       setResolution(loadedReport.resolution ?? "");
-      setSelectedOfficerId(
-        loadedReport.assignedTo?.adminId ?? ""
-      );
-
-      // Only administrators with assignment permission can
-      // retrieve the available Report Officers.
-      setAssignmentLoading(true);
-
-      try {
-        const officersResponse = await fetch(assignmentEndpoint, {
-          method: "GET",
-          credentials: "same-origin",
-          cache: "no-store",
-        });
-
-        if (officersResponse.status === 401) {
-          window.location.assign("/admin/login");
-          return;
-        }
-
-        if (officersResponse.status === 403) {
-          setCanManageAssignments(false);
-          setOfficers([]);
-        } else {
-          const officersData = await officersResponse.json();
-
-          if (!officersResponse.ok || !officersData.success) {
-            throw new Error(
-              officersData.message ||
-                "Unable to load Report Officers."
-            );
-          }
-
-          setOfficers(officersData.officers ?? []);
-          setCanManageAssignments(true);
-        }
-      } finally {
-        setAssignmentLoading(false);
-      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -231,90 +164,11 @@ function AdminUserReportDetailsContent() {
     } finally {
       setLoading(false);
     }
-  }, [reportId, assignmentEndpoint]);
+  }, [reportId]);
 
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
-
-  async function handleAssignment() {
-    if (!report || savingAssignment) return;
-
-    const currentOfficerId = report.assignedTo?.adminId ?? "";
-    const newOfficerId = selectedOfficerId;
-
-    if (currentOfficerId === newOfficerId) {
-      setError("Please select a different officer or unassign the report.");
-      return;
-    }
-
-    if (!newOfficerId && !currentOfficerId) {
-      setError("This report is not currently assigned.");
-      return;
-    }
-
-    if (
-      newOfficerId &&
-      !officers.some((officer) => officer.adminId === newOfficerId)
-    ) {
-      setError("Please select a valid active Report Officer.");
-      return;
-    }
-
-    setSavingAssignment(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const response = await fetch(assignmentEndpoint, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          adminId: newOfficerId || null,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.status === 401) {
-        window.location.assign("/admin/login");
-        return;
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message || "Unable to update the report assignment."
-        );
-      }
-
-      const updatedAssignee: AssignedOfficer | null =
-        data.assignment.assignedTo;
-
-      setReport((current) =>
-        current
-          ? {
-              ...current,
-              assignedTo: updatedAssignee,
-              updatedAt: new Date().toISOString(),
-            }
-          : current
-      );
-
-      setSelectedOfficerId(updatedAssignee?.adminId ?? "");
-      setSuccess(data.message || "Report assignment updated successfully.");
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while updating the assignment."
-      );
-    } finally {
-      setSavingAssignment(false);
-    }
-  }
 
   async function handleUpdate(
     event: React.FormEvent<HTMLFormElement>
@@ -387,7 +241,6 @@ function AdminUserReportDetailsContent() {
         current
           ? {
               ...data.report,
-              assignedTo: current.assignedTo,
             }
           : data.report
       );
@@ -459,7 +312,6 @@ function AdminUserReportDetailsContent() {
         current
           ? {
               ...data.report,
-              assignedTo: current.assignedTo,
             }
           : data.report
       );
@@ -514,8 +366,6 @@ function AdminUserReportDetailsContent() {
       </main>
     );
   }
-
-  const assignedOfficer = report.assignedTo ?? null;
 
   return (
     <main className="min-h-screen bg-[#F7F8F4] text-[#26372b]">
@@ -813,150 +663,6 @@ function AdminUserReportDetailsContent() {
           </div>
 
           <aside className="space-y-6">
-            {canManageAssignments && (
-              <section className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
-                <div className="flex items-center gap-2 border-b border-[#edf0ea] pb-4">
-                  <UserCheck size={18} className="text-[#17472D]" />
-                  <h2 className="text-sm font-bold text-[#26372b]">
-                    Assignment management
-                  </h2>
-                </div>
-
-                <div className="mt-5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#899487]">
-                    Currently assigned officer
-                  </p>
-
-                  {assignedOfficer ? (
-                    <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-4">
-                      <div className="flex items-center gap-2">
-                        <UserCheck
-                          size={17}
-                          className="shrink-0 text-green-700"
-                        />
-                        <p className="text-sm font-bold text-green-900">
-                          {assignedOfficer.name}
-                        </p>
-                      </div>
-
-                      {assignedOfficer.email && (
-                        <p className="mt-2 break-all text-xs text-green-800">
-                          {assignedOfficer.email}
-                        </p>
-                      )}
-
-                      {assignedOfficer.assignedAt && (
-                        <p className="mt-2 text-[10px] text-green-800">
-                          Assigned: {formatDate(assignedOfficer.assignedAt)}
-                        </p>
-                      )}
-
-                      {assignedOfficer.assignedBy?.name && (
-                        <p className="mt-1 text-[10px] text-green-800">
-                          Assigned by: {assignedOfficer.assignedBy.name}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                      <div className="flex items-center gap-2 text-amber-800">
-                        <UserMinus size={17} />
-                        <p className="text-sm font-semibold">
-                          Not assigned
-                        </p>
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-amber-800">
-                        This report has not yet been assigned to a Report Officer.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-5">
-                  <label
-                    htmlFor="report-officer"
-                    className="mb-2 block text-xs font-semibold text-[#52624f]"
-                  >
-                    Select Report Officer
-                  </label>
-
-                  <select
-                    id="report-officer"
-                    value={selectedOfficerId}
-                    onChange={(event) =>
-                      setSelectedOfficerId(event.target.value)
-                    }
-                    disabled={assignmentLoading || savingAssignment}
-                    className="w-full rounded-xl border border-[#dfe7dc] bg-[#fbfcfa] px-3 py-3 text-xs text-[#52624f] outline-none focus:border-[#17472D] disabled:opacity-60"
-                  >
-                    <option value="">Select an officer</option>
-                    {officers.map((officer) => (
-                      <option
-                        key={officer.adminId}
-                        value={officer.adminId}
-                      >
-                        {officer.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {assignmentLoading && (
-                    <p className="mt-2 flex items-center gap-2 text-[10px] text-[#899487]">
-                      <RefreshCw size={12} className="animate-spin" />
-                      Loading Report Officers...
-                    </p>
-                  )}
-
-                  {!assignmentLoading && officers.length === 0 && (
-                    <p className="mt-2 text-[10px] leading-5 text-amber-700">
-                      No active Report Officers are currently available.
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void handleAssignment()}
-                  disabled={
-                    savingAssignment ||
-                    assignmentLoading ||
-                    !selectedOfficerId ||
-                    selectedOfficerId === assignedOfficer?.adminId
-                  }
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-3 text-xs font-bold text-white transition hover:bg-[#103a23] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savingAssignment ? (
-                    <RefreshCw size={15} className="animate-spin" />
-                  ) : (
-                    <UserPlus size={15} />
-                  )}
-                  {savingAssignment
-                    ? "Saving assignment..."
-                    : assignedOfficer
-                      ? "Reassign report"
-                      : "Assign report"}
-                </button>
-
-                {assignedOfficer && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedOfficerId("");
-                      void handleAssignment();
-                    }}
-                    disabled={savingAssignment || assignmentLoading}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <UserMinus size={15} />
-                    Unassign report
-                  </button>
-                )}
-
-                <p className="mt-4 text-[10px] leading-5 text-[#899487]">
-                  Only active administrators with the Report Officer role can be assigned to reports.
-                </p>
-              </section>
-            )}
 
             <section className="rounded-2xl border border-[#e5e9e1] bg-white p-5">
               <div className="flex items-center gap-2 border-b border-[#edf0ea] pb-4">
@@ -1128,7 +834,7 @@ function AdminUserReportDetailsContent() {
         </div>
 
         <p className="mt-8 text-center text-[11px] text-[#9aa395]">
-          AgriVanta Administration · Confidential Investigation Record
+          AgriVanta Administration Â· Confidential Investigation Record
         </p>
       </div>
     </main>
@@ -1150,3 +856,6 @@ export default function AdminUserReportDetailsPage() {
     </Suspense>
   );
 }
+
+
+

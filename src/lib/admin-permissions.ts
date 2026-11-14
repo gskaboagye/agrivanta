@@ -1,4 +1,4 @@
-export const ADMIN_ROLES = [
+﻿export const ADMIN_ROLES = [
   "super_admin",
   "report_manager",
   "report_officer",
@@ -15,8 +15,6 @@ export const ADMIN_PERMISSIONS = [
   "manage_agricultural_reports",
   "view_platform_analytics",
   "view_all_reports",
-  "view_assigned_reports",
-  "assign_reports",
   "investigate_reports",
   "communicate_with_reporters",
   "add_internal_notes",
@@ -35,7 +33,6 @@ export const ROLE_PERMISSIONS: Record<
   super_admin: ADMIN_PERMISSIONS,
   report_manager: [
     "view_all_reports",
-    "assign_reports",
     "investigate_reports",
     "communicate_with_reporters",
     "add_internal_notes",
@@ -43,12 +40,7 @@ export const ROLE_PERMISSIONS: Record<
     "dismiss_reports",
     "view_report_analytics",
   ],
-  report_officer: [
-    "view_assigned_reports",
-    "investigate_reports",
-    "communicate_with_reporters",
-    "add_internal_notes",
-  ],
+  report_officer: [],
 };
 
 export const ROLE_LABELS: Record<AdminRole, string> = {

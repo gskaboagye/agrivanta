@@ -1,5 +1,4 @@
-
-import { connection, NextRequest, NextResponse } from "next/server";
+﻿import { connection, NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -31,16 +30,13 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function hasReportAccessFilter(
+function canAccessReports(
   admin: Awaited<ReturnType<typeof requireAdmin>>
 ) {
-  const filter: Record<string, unknown> = {};
-
-  if (admin.role && !hasPermission(admin.role, "view_all_reports")) {
-    filter["assignedTo.adminId"] = admin.id;
-  }
-
-  return filter;
+  return (
+    admin.role !== null &&
+    hasPermission(admin.role, "view_all_reports")
+  );
 }
 
 function canUpdateReport(
@@ -79,21 +75,7 @@ export async function GET(
   try {
     const admin = await requireAdmin();
 
-    if (!admin.role) {
-      return forbiddenResponse();
-    }
-
-    const canViewAll = hasPermission(
-      admin.role,
-      "view_all_reports"
-    );
-
-    const canViewAssigned = hasPermission(
-      admin.role,
-      "view_assigned_reports"
-    );
-
-    if (!canViewAll && !canViewAssigned) {
+    if (!canAccessReports(admin)) {
       return forbiddenResponse();
     }
 
@@ -109,17 +91,10 @@ export async function GET(
     const db = await getDatabase();
 
     const report = await db.collection("userReports").findOne(
-      {
-        reportId: id,
-        ...hasReportAccessFilter(admin),
-      },
-      {
-        projection: { _id: 0 },
-      }
+      { reportId: id },
+      { projection: { _id: 0 } }
     );
 
-    // Return 404 for reports that do not exist or are not assigned
-    // to the requesting Report Officer.
     if (!report) {
       return NextResponse.json(
         { success: false, message: "Report not found." },
@@ -137,6 +112,13 @@ export async function GET(
       error.message === "ADMIN_UNAUTHORIZED"
     ) {
       return unauthorizedResponse();
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_FORBIDDEN"
+    ) {
+      return forbiddenResponse();
     }
 
     console.error("Admin report details error:", error);
@@ -157,21 +139,7 @@ export async function PATCH(
   try {
     const admin = await requireAdmin();
 
-    if (!admin.role) {
-      return forbiddenResponse();
-    }
-
-    const canViewAll = hasPermission(
-      admin.role,
-      "view_all_reports"
-    );
-
-    const canViewAssigned = hasPermission(
-      admin.role,
-      "view_assigned_reports"
-    );
-
-    if (!canViewAll && !canViewAssigned) {
+    if (!canAccessReports(admin)) {
       return forbiddenResponse();
     }
 
@@ -219,14 +187,17 @@ export async function PATCH(
 
     const data = validation.data;
 
-    // Check permissions for each requested operation.
-    if (data.status === "resolved" &&
-        !canUpdateReport(admin, "resolve_reports")) {
+    if (
+      data.status === "resolved" &&
+      !canUpdateReport(admin, "resolve_reports")
+    ) {
       return forbiddenResponse();
     }
 
-    if (data.status === "dismissed" &&
-        !canUpdateReport(admin, "dismiss_reports")) {
+    if (
+      data.status === "dismissed" &&
+      !canUpdateReport(admin, "dismiss_reports")
+    ) {
       return forbiddenResponse();
     }
 
@@ -263,12 +234,7 @@ export async function PATCH(
     const db = await getDatabase();
     const collection = db.collection("userReports");
 
-    // Scope the database lookup itself to the administrator's
-    // permitted reports. Report Officers cannot access other cases.
-    const reportFilter = {
-      reportId: id,
-      ...hasReportAccessFilter(admin),
-    };
+    const reportFilter = { reportId: id };
 
     const existingReport = await collection.findOne(reportFilter);
 
@@ -343,8 +309,6 @@ export async function PATCH(
       updateOperation.$push = pushes;
     }
 
-    // Keep the ownership condition in the update query as well.
-    // This prevents updating a report after it has been reassigned.
     const updateResult = await collection.updateOne(
       reportFilter,
       updateOperation

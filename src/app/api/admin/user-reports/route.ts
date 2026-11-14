@@ -1,5 +1,4 @@
-
-import { connection, NextRequest, NextResponse } from "next/server";
+﻿import { connection, NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/admin-permissions";
 import { getDatabase } from "@/lib/mongodb";
@@ -26,29 +25,10 @@ export async function GET(request: NextRequest) {
   try {
     const admin = await requireAdmin();
 
-    if (!admin.role) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Administrator role has not been configured.",
-        },
-        { status: 403 }
-      );
-    }
-
-    // Super Admins and Report Managers can view all reports.
-    // Report Officers can only view reports assigned to them.
-    const canViewAllReports = hasPermission(
-      admin.role,
-      "view_all_reports"
-    );
-
-    const canViewAssignedReports = hasPermission(
-      admin.role,
-      "view_assigned_reports"
-    );
-
-    if (!canViewAllReports && !canViewAssignedReports) {
+    if (
+      !admin.role ||
+      !hasPermission(admin.role, "view_all_reports")
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -58,39 +38,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // This scope is applied to every report query and status count.
-    const scopeFilter: Record<string, unknown> = {};
-
-    if (!canViewAllReports) {
-      scopeFilter["assignedTo.adminId"] = admin.id;
-    }
-
     const searchParams = request.nextUrl.searchParams;
-
     const pageValue = Number(searchParams.get("page") ?? "1");
-
     const page = Number.isFinite(pageValue)
       ? Math.max(1, Math.floor(pageValue))
       : 1;
 
     const pageSize = 15;
-
     const status = searchParams.get("status");
     const category = searchParams.get("category");
     const search = searchParams.get("search")?.trim() ?? "";
 
-    // Start with the administrator's permitted report scope.
-    const filter: Record<string, unknown> = {
-      ...scopeFilter,
-    };
+    const filter: Record<string, unknown> = {};
 
     if (status && status !== "all") {
       if (!VALID_STATUSES.includes(status)) {
         return NextResponse.json(
-          {
-            success: false,
-            message: "Invalid report status.",
-          },
+          { success: false, message: "Invalid report status." },
           { status: 400 }
         );
       }
@@ -101,10 +65,7 @@ export async function GET(request: NextRequest) {
     if (category && category !== "all") {
       if (!VALID_CATEGORIES.includes(category)) {
         return NextResponse.json(
-          {
-            success: false,
-            message: "Invalid report category.",
-          },
+          { success: false, message: "Invalid report category." },
           { status: 400 }
         );
       }
@@ -138,14 +99,9 @@ export async function GET(request: NextRequest) {
         .skip((page - 1) * pageSize)
         .limit(pageSize)
         .toArray(),
-
       collection.countDocuments(filter),
-
       collection
         .aggregate<{ _id: string; count: number }>([
-          {
-            $match: scopeFilter,
-          },
           {
             $group: {
               _id: "$status",
