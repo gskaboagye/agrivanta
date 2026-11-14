@@ -1,5 +1,6 @@
-
+﻿
 import { connection, NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
@@ -7,6 +8,7 @@ import { getCurrentAdmin } from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/admin-permissions";
 import { getDatabase } from "@/lib/mongodb";
 import { sendReportMessageEmail } from "@/lib/email";
+import { sendSms } from "@/lib/sms";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -180,6 +182,7 @@ async function notifyConversationParticipants(
     reportId: string;
     referenceNumber: string;
     reporter: {
+      userId?: string;
       name?: string;
       email?: string;
     };
@@ -191,34 +194,79 @@ async function notifyConversationParticipants(
     const db = await getDatabase();
 
     if (adminSender) {
+      // Email notification to the reporter.
       const reporterEmail = report.reporter?.email;
 
-      if (!reporterEmail) {
-        console.warn(
-          "Report notification skipped: reporter email is unavailable."
-        );
-        return;
+      if (reporterEmail) {
+        try {
+          const result = await sendReportMessageEmail({
+            to: reporterEmail,
+            recipientName: report.reporter.name || "Reporter",
+            senderName: message.senderName,
+            senderType: "admin",
+            referenceNumber: report.referenceNumber,
+            message: message.message,
+          });
+
+          if (!result.success) {
+            console.error(
+              "Reporter notification email failed:",
+              result.error
+            );
+          }
+        } catch (error) {
+          console.error("Reporter notification email error:", error);
+        }
       }
 
-      const result = await sendReportMessageEmail({
-        to: reporterEmail,
-        recipientName: report.reporter.name || "Reporter",
-        senderName: message.senderName,
-        senderType: "admin",
-        referenceNumber: report.referenceNumber,
-        message: message.message,
-      });
+      // SMS notification only for a verified phone number
+      // with explicit SMS notification consent.
+      const reporterUserId = report.reporter?.userId;
 
-      if (!result.success) {
-        console.error(
-          "Reporter notification email failed:",
-          result.error
-        );
+      if (reporterUserId && ObjectId.isValid(reporterUserId)) {
+        try {
+          const reporterProfile = await db.collection("users").findOne(
+            { _id: new ObjectId(reporterUserId) },
+            {
+              projection: {
+                phone: 1,
+                phoneVerified: 1,
+                smsNotificationsEnabled: 1,
+              },
+            }
+          );
+
+          const phone = String(reporterProfile?.phone ?? "").trim();
+
+          const canReceiveSms =
+            reporterProfile?.phoneVerified === true &&
+            reporterProfile?.smsNotificationsEnabled === true &&
+            /^\+233\d{9}$/.test(phone);
+
+          if (canReceiveSms) {
+            const smsResult = await sendSms({
+              recipient: phone,
+              message:
+                `AgriVanta: You have a new reply to report ` +
+                `${report.referenceNumber}. Log in to your account to view the conversation.`,
+            });
+
+            if (!smsResult.success) {
+              console.error(
+                "Reporter SMS notification failed:",
+                smsResult.message
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Reporter SMS notification error:", error);
+        }
       }
 
       return;
     }
 
+    // Preserve existing email notifications to administrators.
     const administrators = await db
       .collection("administrators")
       .find(
@@ -250,34 +298,34 @@ async function notifyConversationParticipants(
             administrator.email.trim().length > 0
         )
         .map(async (administrator) => {
-          const result = await sendReportMessageEmail({
-            to: String(administrator.email),
-            recipientName: String(
-              administrator.name || "Administrator"
-            ),
-            senderName: message.senderName,
-            senderType: "user",
-            referenceNumber: report.referenceNumber,
-            message: message.message,
-          });
+          try {
+            const result = await sendReportMessageEmail({
+              to: String(administrator.email),
+              recipientName: String(
+                administrator.name || "Administrator"
+              ),
+              senderName: message.senderName,
+              senderType: "user",
+              referenceNumber: report.referenceNumber,
+              message: message.message,
+            });
 
-          if (!result.success) {
-            console.error(
-              "Administrator notification email failed:",
-              result.error
-            );
+            if (!result.success) {
+              console.error(
+                "Administrator notification email failed:",
+                result.error
+              );
+            }
+          } catch (error) {
+            console.error("Administrator notification email error:", error);
           }
         })
     );
   } catch (error) {
-    // A notification failure must never undo a saved message.
-    console.error(
-      "Report conversation notification error:",
-      error
-    );
+    // Notification failures must never undo a saved message.
+    console.error("Report conversation notification error:", error);
   }
 }
-
 export async function GET(
   _request: NextRequest,
   { params }: RouteContext
@@ -527,3 +575,4 @@ export async function POST(
     );
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import "server-only";
 
 type SendSmsInput = {
   recipient: string;
@@ -10,10 +11,10 @@ type ArkeselResponse = {
   data?: unknown;
 };
 
-type SendSmsResult = {
+export type SendSmsResult = {
   success: boolean;
   message: string;
-  data?: unknown;
+  providerAccepted: boolean;
 };
 
 const ARKESEL_API_URL = "https://sms.arkesel.com/api/v2/sms/send";
@@ -25,35 +26,31 @@ export async function sendSms({
   const apiKey = process.env.ARKESEL_API_KEY;
   const senderId = process.env.ARKESEL_SENDER_ID;
 
-  // SMS remains disabled until explicitly enabled.
   if (process.env.ARKESEL_SMS_ENABLED !== "true") {
     return {
       success: false,
+      providerAccepted: false,
       message: "SMS sending is currently disabled.",
     };
   }
 
-  if (!apiKey) {
-    return {
-      success: false,
-      message: "Arkesel API key is not configured.",
-    };
-  }
+  if (!apiKey || !senderId) {
+    console.error("Arkesel configuration is incomplete.");
 
-  if (!senderId) {
     return {
       success: false,
-      message: "Arkesel sender ID is not configured.",
+      providerAccepted: false,
+      message: "SMS service is not properly configured.",
     };
   }
 
   const normalizedRecipient = recipient.replace(/[\s()-]/g, "");
 
-  // Ghanaian phone numbers must use international format.
   if (!/^\+233\d{9}$/.test(normalizedRecipient)) {
     return {
       success: false,
-      message: "Invalid recipient phone number. Use +233XXXXXXXXX.",
+      providerAccepted: false,
+      message: "Invalid Ghanaian recipient phone number.",
     };
   }
 
@@ -62,6 +59,7 @@ export async function sendSms({
   if (!trimmedMessage || trimmedMessage.length > 1000) {
     return {
       success: false,
+      providerAccepted: false,
       message: "Message must contain between 1 and 1000 characters.",
     };
   }
@@ -82,30 +80,45 @@ export async function sendSms({
       signal: AbortSignal.timeout(15000),
     });
 
-    const result = (await response.json()) as ArkeselResponse;
+    let result: ArkeselResponse;
+
+    try {
+      result = (await response.json()) as ArkeselResponse;
+    } catch {
+      console.error("Arkesel returned an invalid response.");
+
+      return {
+        success: false,
+        providerAccepted: false,
+        message: "SMS provider returned an invalid response.",
+      };
+    }
 
     if (!response.ok || result.status !== "success") {
-      console.error("Arkesel SMS request failed:", {
+      console.error("Arkesel SMS request was not accepted:", {
         status: response.status,
-        message: result.message,
       });
 
       return {
         success: false,
-        message: result.message || "Arkesel could not send the SMS.",
+        providerAccepted: false,
+        message: "SMS provider could not accept the request.",
       };
     }
 
     return {
       success: true,
+      providerAccepted: true,
       message: "SMS request accepted by Arkesel.",
-      data: result.data,
     };
   } catch (error) {
-    console.error("Arkesel SMS connection error:", error);
+    console.error("Arkesel SMS connection error:", {
+      error: error instanceof Error ? error.name : "Unknown error",
+    });
 
     return {
       success: false,
+      providerAccepted: false,
       message: "Unable to connect to the SMS provider.",
     };
   }
