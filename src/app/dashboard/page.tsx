@@ -344,13 +344,6 @@ export default async function DashboardPage() {
 
   const currentUser = await getCurrentUser();
 
-  // Temporary authentication diagnostic.
-  console.log("[DASHBOARD AUTH CHECK]", {
-    authenticated: Boolean(currentUser),
-    role: currentUser?.role ?? null,
-    userId: currentUser?.id ?? null,
-  });
-
   if (!currentUser) {
     redirect("/login");
   }
