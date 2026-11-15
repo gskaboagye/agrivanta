@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 const INACTIVITY_LIMIT = 30 * 60 * 1000;
 const REFRESH_INTERVAL = 5 * 60 * 1000;
@@ -10,15 +10,14 @@ const CHANNEL_NAME = "agrivanta_session_activity";
 
 export default function SessionTimeout() {
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    if (pathname.startsWith("/admin")) return;
 
     let authenticated = false;
     let expired = false;
     let lastActivity = Date.now();
     let refreshInProgress = false;
+    let refreshController: AbortController | null = null;
 
     const channel =
       typeof BroadcastChannel !== "undefined"
@@ -59,6 +58,18 @@ export default function SessionTimeout() {
     }
 
     function handleBroadcast(event: MessageEvent) {
+      if (event.data?.type === "logout") {
+        if (expired) return;
+
+        expired = true;
+        refreshController?.abort();
+        refreshController = null;
+
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
+
       if (
         event.data?.type === "activity" &&
         typeof event.data.timestamp === "number" &&
@@ -72,6 +83,8 @@ export default function SessionTimeout() {
       if (expired) return;
 
       expired = true;
+      refreshController?.abort();
+      refreshController = null;
 
       try {
         await fetch("/api/auth/logout", {
@@ -95,12 +108,15 @@ export default function SessionTimeout() {
       }
 
       refreshInProgress = true;
+      const controller = new AbortController();
+      refreshController = controller;
 
       try {
         const response = await fetch("/api/auth/refresh", {
           method: "POST",
           credentials: "same-origin",
           cache: "no-store",
+          signal: controller.signal,
         });
 
         if (response.status === 401) {
@@ -112,6 +128,7 @@ export default function SessionTimeout() {
         console.error("Session refresh request failed:", error);
       } finally {
         refreshInProgress = false;
+        refreshController = null;
       }
     }
 
@@ -142,8 +159,36 @@ export default function SessionTimeout() {
 
         authenticated = true;
 
-        const now = Date.now();
-        saveActivity(now);
+        let storedActivity: number | null = null;
+
+        try {
+          const storedValue = localStorage.getItem(ACTIVITY_KEY);
+
+          if (storedValue) {
+            const parsedValue = Number(storedValue);
+
+            if (
+              Number.isFinite(parsedValue) &&
+              parsedValue > 0 &&
+              parsedValue <= Date.now()
+            ) {
+              storedActivity = parsedValue;
+            }
+          }
+        } catch {
+          console.warn("Unable to read stored session activity.");
+        }
+
+        if (storedActivity === null) {
+          saveActivity(Date.now());
+          return;
+        }
+
+        lastActivity = storedActivity;
+
+        if (Date.now() - lastActivity >= INACTIVITY_LIMIT) {
+          await logoutForInactivity();
+        }
       } catch (error) {
         console.error("Unable to initialize session monitor:", error);
       }
@@ -177,7 +222,9 @@ export default function SessionTimeout() {
       channel?.removeEventListener("message", handleBroadcast);
       channel?.close();
     };
-  }, [pathname, router]);
+  }, [router]);
 
   return null;
 }
+
+

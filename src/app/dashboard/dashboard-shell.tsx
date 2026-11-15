@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import {
@@ -261,6 +261,12 @@ function Sidebar({
 
       if (!response.ok) {
         throw new Error("Unable to sign out.");
+      }
+
+      if (typeof BroadcastChannel !== "undefined") {
+        const channel = new BroadcastChannel("agrivanta_session_activity");
+        channel.postMessage({ type: "logout" });
+        channel.close();
       }
 
       router.replace("/login");

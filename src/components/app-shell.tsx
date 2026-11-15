@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -41,7 +41,7 @@ function AppShellContent() {
 
   return (
     <>
-      <SessionTimeout />
+      {!isAuthRoute && <SessionTimeout />}
       <RecentPageTracker />
       {!isDashboardRoute && !isAuthRoute && <GlobalAccountNav />}
       {!isAuthRoute && <AssistPanel />}
@@ -56,3 +56,4 @@ export default function AppShell() {
     </Suspense>
   );
 }
+

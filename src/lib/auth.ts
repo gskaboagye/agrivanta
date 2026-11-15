@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
@@ -56,7 +56,7 @@ export async function verifyPassword(
   return bcrypt.compare(password, passwordHash);
 }
 
-export async function createSession(user: AuthUser) {
+export async function createSession(user: AuthUser, expectedSessionVersion?: number) {
   if (
     !isValidUserId(user.id) ||
     !ACCOUNT_ROLES.includes(user.role)
@@ -82,6 +82,13 @@ export async function createSession(user: AuthUser) {
       ? account.sessionVersion
       : 0;
 
+  if (
+    expectedSessionVersion !== undefined &&
+    sessionVersion !== expectedSessionVersion
+  ) {
+    throw new Error("Session has been revoked.");
+  }
+
   const token = await new SignJWT({
     role: user.role,
     sessionVersion,
@@ -104,14 +111,37 @@ export async function createSession(user: AuthUser) {
 }
 
 export async function refreshSession(): Promise<boolean> {
+  const claims = await getSessionClaims();
+
+  if (!claims) {
+    return false;
+  }
+
   const user = await getCurrentUser();
 
   if (!user) {
     return false;
   }
 
-  await createSession(user);
+  await createSession(user, claims.sessionVersion);
   return true;
+}
+
+export async function revokeCurrentSession(): Promise<void> {
+  const claims = await getSessionClaims();
+
+  try {
+    if (claims) {
+      const db = await getDatabase();
+
+      await db.collection("users").updateOne(
+        { _id: new ObjectId(claims.userId) },
+        { $inc: { sessionVersion: 1 } }
+      );
+    }
+  } finally {
+    await destroySession();
+  }
 }
 
 export async function destroySession() {
@@ -224,3 +254,4 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
@@ -57,6 +57,12 @@ export default function LoginPage() {
       if (!response.ok) {
         setError(result.message || "Unable to log in.");
         return;
+      }
+
+      try {
+        localStorage.setItem("agrivanta_last_activity", String(Date.now()));
+      } catch {
+        console.warn("Unable to save session activity timestamp.");
       }
 
       router.push(redirectTo);
@@ -196,3 +202,4 @@ export default function LoginPage() {
     </main>
   );
 }
+
