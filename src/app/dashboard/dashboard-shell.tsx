@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import {
@@ -248,6 +248,7 @@ function Sidebar({
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
+  
   async function handleLogout() {
     if (loggingOut) return;
 
@@ -257,26 +258,40 @@ function Sidebar({
       const response = await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "same-origin",
+        cache: "no-store",
       });
 
-      if (!response.ok) {
-        throw new Error("Unable to sign out.");
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to sign out.");
       }
 
+      // Notify other open browser tabs.
       if (typeof BroadcastChannel !== "undefined") {
-        const channel = new BroadcastChannel("agrivanta_session_activity");
+        const channel = new BroadcastChannel(
+          "agrivanta_session_activity"
+        );
         channel.postMessage({ type: "logout" });
         channel.close();
       }
 
-      router.replace("/login");
-      router.refresh();
+      // Clear the previous session activity timestamp.
+      try {
+        localStorage.removeItem("agrivanta_last_activity");
+      } catch {
+        console.warn("Unable to clear session activity timestamp.");
+      }
+
+      // Navigate fully to the login page.
+      window.location.replace("/login");
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error("Dashboard logout failed:", error);
       window.alert("Unable to sign out. Please try again.");
       setLoggingOut(false);
     }
   }
+
 
   return (
     <>
