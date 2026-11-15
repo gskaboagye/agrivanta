@@ -391,52 +391,7 @@ function Sidebar({
             })}
           </nav>
         </div>
-
-        <div className="mt-7 px-4">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa294]">
-            Recent Pages
-          </p>
-
-          <nav aria-label="Recent pages" className="space-y-1">
-            {recentPages.length > 0 ? (
-              recentPages.map((page) => {
-                const RecentIcon =
-                  page.path === "/agriguide" ? BookOpen :
-                  page.path === "/weather" ? CloudSun :
-                  page.path.startsWith("/products") ? ShoppingBag :
-                  page.path.startsWith("/news") ? BookOpen :
-                  page.path.startsWith("/dashboard") ? LayoutDashboard :
-                  History;
-
-                const active = pathname === page.path;
-
-                return (
-                  <Link
-                    key={page.path}
-                    href={page.path}
-                    onClick={onClose}
-                    title={page.title}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium transition ${
-                      active
-                        ? "bg-[#EAF0E6] text-[#17472D]"
-                        : "text-[#778071] hover:bg-[#f5f7f2] hover:text-[#17472D]"
-                    }`}
-                  >
-                    <RecentIcon size={16} className="shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">
-                      {page.title}
-                    </span>
-                  </Link>
-                );
-              })
-            ) : (
-              <p className="px-3 py-2 text-[11px] leading-5 text-[#9aa294]">
-                Pages you visit will appear here.
-              </p>
-            )}
-          </nav>
-        </div>
-
+        
         <div className="mt-8 px-4">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa294]">
             Your account
@@ -1055,10 +1010,4 @@ export default function DashboardShell({
     </div>
   );
 }
-
-
-
-
-
-
 
