@@ -318,6 +318,7 @@ function Sidebar({
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
         <div className="px-4 pt-7">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa294]">
             Workspace
@@ -451,7 +452,8 @@ function Sidebar({
           </button>
         </div>
 
-        <div className="mt-auto p-4">
+        </div>
+        <div className="shrink-0 p-4">
           <div className="rounded-2xl bg-[#F8F6EE] p-4">
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#17472D]">
               <Leaf size={19} />
@@ -1032,6 +1034,9 @@ export default function DashboardShell({
     </div>
   );
 }
+
+
+
 
 
 
