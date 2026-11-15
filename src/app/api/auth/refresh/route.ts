@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { refreshSession } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
 
 export async function POST() {
   try {
@@ -33,3 +32,4 @@ export async function POST() {
     );
   }
 }
+
