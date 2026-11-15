@@ -1,15 +1,18 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Leaf } from "lucide-react";
+import { ArrowRight, Leaf, Clock } from "lucide-react";
 import { emailSchema } from "@/lib/validation";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const requestedRedirect = searchParams.get("redirect");
+  const sessionExpired = searchParams.get("reason") === "session-expired";
+
   const redirectTo =
     requestedRedirect?.startsWith("/") &&
     !requestedRedirect.startsWith("//") &&
@@ -43,7 +46,10 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailResult.data, password }),
+        body: JSON.stringify({
+          email: emailResult.data,
+          password,
+        }),
       });
 
       const result = await response.json();
@@ -75,13 +81,28 @@ export default function LoginPage() {
         <h1 className="mt-8 text-center text-2xl font-extrabold">
           Welcome back
         </h1>
+
         <p className="mt-2 text-center text-sm text-[#718071]">
           Log in to your AgriVanta account.
         </p>
 
+        {sessionExpired && (
+          <div
+            role="status"
+            className="mt-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            <Clock size={20} className="mt-0.5 shrink-0" />
+            <p>
+              Your session expired due to inactivity. Please log in again
+              to continue using AgriVanta.
+            </p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-7 space-y-5">
           <label className="block text-sm font-semibold">
             Email address
+
             <input
               required
               type="email"
@@ -100,8 +121,12 @@ export default function LoginPage() {
               className="mt-2 w-full rounded-lg border border-[#D9DED4] px-4 py-3 font-normal outline-none focus:border-[#17472D]"
               placeholder="you@example.com"
             />
+
             {emailError && (
-              <span id="email-error" className="mt-1 block text-xs font-normal text-red-600">
+              <span
+                id="email-error"
+                className="mt-1 block text-xs font-normal text-red-600"
+              >
                 {emailError}
               </span>
             )}
@@ -109,6 +134,7 @@ export default function LoginPage() {
 
           <label className="block text-sm font-semibold">
             Password
+
             <input
               required
               type="password"
@@ -131,7 +157,10 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <p
+              role="alert"
+              className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+            >
               {error}
             </p>
           )}
@@ -148,7 +177,14 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-[#718071]">
           Don't have an account?{" "}
-          <Link href={redirectTo === "/dashboard" ? "/register" : `/register?redirect=${encodeURIComponent(redirectTo)}`} className="font-bold text-[#17472D] hover:underline">
+          <Link
+            href={
+              redirectTo === "/dashboard"
+                ? "/register"
+                : `/register?redirect=${encodeURIComponent(redirectTo)}`
+            }
+            className="font-bold text-[#17472D] hover:underline"
+          >
             Register
           </Link>
         </p>
@@ -160,4 +196,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

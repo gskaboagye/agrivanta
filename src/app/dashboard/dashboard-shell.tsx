@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import {
@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   History,
   Leaf,
+  LogOut,
   Menu,
   Package,
   Plus,
@@ -244,6 +245,32 @@ function Sidebar({
   recentPages: RecentPage[];
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to sign out.");
+      }
+
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert("Unable to sign out. Please try again.");
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <>
@@ -412,6 +439,16 @@ function Sidebar({
               Help & support
             </Link>
           </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut size={18} strokeWidth={1.9} />
+            {loggingOut ? "Signing out..." : "Sign out"}
+          </button>
         </div>
 
         <div className="mt-auto p-4">
@@ -928,102 +965,6 @@ export default function DashboardShell({
             </div>
           </section>
 
-          <section id="activity" className="mt-8 scroll-mt-24">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="text-[16px] font-bold tracking-tight text-[#26372b]">
-                  Recently added listings
-                </h3>
-                <p className="mt-1 text-xs text-[#879084]">
-                  The latest active products from the AgriVanta marketplace.
-                </p>
-              </div>
-
-              <Link
-                href="/products"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17472D] hover:underline"
-              >
-                View all products <ArrowRight size={14} />
-              </Link>
-            </div>
-
-            {filteredListings.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#dce3d6] bg-white px-5 py-12 text-center">
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
-                  <Search size={22} />
-                </span>
-
-                <p className="mt-4 text-sm font-bold text-[#26372b]">
-                  {search ? "No matching listings" : "No active listings yet"}
-                </p>
-
-                <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-[#879084]">
-                  {search
-                    ? "Try another search term or browse the full marketplace."
-                    : "When active listings are available, they will appear here."}
-                </p>
-
-                <Link
-                  href="/products"
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#17472D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#103921]"
-                >
-                  Browse marketplace <ArrowRight size={14} />
-                </Link>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-[#e8ebe4] bg-white">
-                <div className="divide-y divide-[#edf0e9]">
-                  {filteredListings.map((listing) => (
-                    <Link
-                      key={listing.id}
-                      href="/products"
-                      className="flex items-center gap-4 px-4 py-4 transition hover:bg-[#fbfcf9] sm:px-6"
-                    >
-                      <div className="flex h-[58px] w-[66px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#EAF0E6]">
-                        {listing.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={listing.image}
-                            alt={listing.title}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Wheat size={25} className="text-[#17472D]" />
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-bold text-[#26372b]">
-                          {listing.title}
-                        </p>
-                        <p className="mt-1 truncate text-[11px] text-[#879084]">
-                          {listing.category} Â· {listing.location}
-                        </p>
-                        <p className="mt-1 text-[10px] text-[#a0a79b]">
-                          {formatDate(listing.date)}
-                        </p>
-                      </div>
-
-                      <div className="hidden shrink-0 text-right sm:block">
-                        <p className="text-[13px] font-bold text-[#17472D]">
-                          {formatPrice(listing.price)}
-                        </p>
-                        <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-[#658060]">
-                          <CheckCircle2 size={12} /> Active
-                        </span>
-                      </div>
-
-                      <ArrowRight
-                        size={16}
-                        className="shrink-0 text-[#a3aa9e]"
-                      />
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-
           <section id="account" className="mt-8 scroll-mt-24">
             <div className="mb-4">
               <h3 className="text-[16px] font-bold tracking-tight text-[#26372b]">
@@ -1078,7 +1019,7 @@ export default function DashboardShell({
             className="mt-10 flex flex-col gap-2 border-t border-[#e5e9e0] py-6 text-[11px] text-[#929a8e] sm:flex-row sm:items-center sm:justify-between"
           >
             <p>
-              Â© {new Date().getFullYear()} AgriVanta. Powering Every Link in
+              Ã‚Â© {new Date().getFullYear()} AgriVanta. Powering Every Link in
               Agriculture.
             </p>
             <p className="flex items-center gap-2">
@@ -1091,5 +1032,7 @@ export default function DashboardShell({
     </div>
   );
 }
+
+
 
 

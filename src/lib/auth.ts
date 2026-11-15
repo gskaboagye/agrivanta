@@ -25,7 +25,9 @@ export type AuthUser = {
 };
 
 const COOKIE_NAME = "agrivanta_session";
-const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 7;
+
+// Session expires after 30 minutes without activity.
+export const SESSION_DURATION_SECONDS = 60 * 30;
 
 function getSecret() {
   const secret = process.env.AUTH_SECRET;
@@ -99,6 +101,17 @@ export async function createSession(user: AuthUser) {
     path: "/",
     maxAge: SESSION_DURATION_SECONDS,
   });
+}
+
+export async function refreshSession(): Promise<boolean> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  await createSession(user);
+  return true;
 }
 
 export async function destroySession() {
@@ -183,7 +196,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (user.status === "disabled") {
       return null;
     }
-if (user.role !== claims.role) {
+
+    if (user.role !== claims.role) {
       return null;
     }
 
@@ -210,4 +224,3 @@ if (user.role !== claims.role) {
     return null;
   }
 }
-

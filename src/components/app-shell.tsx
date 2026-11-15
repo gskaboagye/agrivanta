@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import GlobalAccountNav from "@/components/global-account-nav";
 import RecentPageTracker from "@/components/recent-page-tracker";
 import AssistPanel from "@/components/assist/AssistPanel";
+import SessionTimeout from "@/components/auth/session-timeout";
 
 function AppShellContent() {
   const pathname = usePathname();
@@ -40,6 +41,7 @@ function AppShellContent() {
 
   return (
     <>
+      <SessionTimeout />
       <RecentPageTracker />
       {!isDashboardRoute && !isAuthRoute && <GlobalAccountNav />}
       {!isAuthRoute && <AssistPanel />}
