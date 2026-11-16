@@ -423,6 +423,7 @@ export default function Home() {
                 <a href="/reports" className="block transition hover:text-[#D9A441]">Reports</a>
                 <a href="/about" className="block transition hover:text-[#D9A441]">About Us</a>
                 <a href="/feedback" className="block transition hover:text-[#D9A441]">Feedback</a>
+                <a href="/faq" className="block transition hover:text-[#D9A441]">Frequently Asked Questions</a>
               </div>
             </div>
 
@@ -450,14 +451,37 @@ export default function Home() {
                 Follow AgriVanta
               </h3>
 
-              <div className="flex flex-wrap gap-2">
-                {["Facebook", "Instagram", "LinkedIn", "YouTube", "TikTok"].map((platform) => (
+              <div className="flex flex-wrap gap-3">
+                {[
+                  {
+                    name: "Facebook",
+                    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M13.5 21v-8h2.7l.4-3.1h-3.1V8c0-.9.3-1.5 1.6-1.5h1.7V3.7c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2H7.3V13h2.8v8z" /></svg>,
+                  },
+                  {
+                    name: "Instagram",
+                    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" /></svg>,
+                  },
+                  {
+                    name: "LinkedIn",
+                    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M5 8.5H2V21h3V8.5ZM3.5 2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6ZM21 13.2c0-3.7-2-5.4-4.7-5.4a4 4 0 0 0-3.6 2V8.5h-3V21h3v-6.2c0-1.6.3-3.2 2.3-3.2s2 1.9 2 3.3V21h3v-7.8Z" /></svg>,
+                  },
+                  {
+                    name: "YouTube",
+                    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M23 12s0-3.4-.4-5a2.5 2.5 0 0 0-1.8-1.8C19.2 4.8 12 4.8 12 4.8s-7.2 0-8.8.4A2.5 2.5 0 0 0 1.4 7C1 8.6 1 12 1 12s0 3.4.4 5a2.5 2.5 0 0 0 1.8 1.8c1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-5 .4-5Z" /><path d="m10 15.5 6-3.5-6-3.5v7Z" fill="#103720" /></svg>,
+                  },
+                  {
+                    name: "TikTok",
+                    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M19.6 7.2a5.7 5.7 0 0 1-3.5-1.2v8.2a5.7 5.7 0 1 1-5.7-5.7c.4 0 .8 0 1.2.1v3.2a2.5 2.5 0 1 0 1.7 2.4V2h3.1a5.7 5.7 0 0 0 3.2 3.5v1.7Z" /></svg>,
+                  },
+                ].map((platform) => (
                   <span
-                    key={platform}
-                    title={`${platform} — coming soon`}
-                    className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white/65"
+                    key={platform.name}
+                    title={`${platform.name} — coming soon`}
+                    aria-label={`${platform.name} social media page coming soon`}
+                    aria-disabled="true"
+                    className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-lg border border-white/20 text-white/70 transition hover:border-[#D9A441] hover:text-[#D9A441]"
                   >
-                    {platform}
+                    {platform.icon}
                   </span>
                 ))}
               </div>
@@ -487,6 +511,8 @@ export default function Home() {
     </main>
   );
 }
+
+
 
 
 
