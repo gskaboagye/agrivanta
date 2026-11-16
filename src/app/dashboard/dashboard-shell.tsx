@@ -399,7 +399,7 @@ function Sidebar({
 
           <div className="space-y-1">
             <Link
-              href="/dashboard#account"
+              href="/dashboard/profile"
               onClick={onClose}
               className="flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-semibold text-[#6c766b] transition hover:bg-[#f5f7f2] hover:text-[#17472D]"
             >
@@ -408,7 +408,7 @@ function Sidebar({
             </Link>
 
             <Link
-              href="/dashboard#help"
+              href="/support-us"
               onClick={onClose}
               className="flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-semibold text-[#6c766b] transition hover:bg-[#f5f7f2] hover:text-[#17472D]"
             >
@@ -1010,4 +1010,5 @@ export default function DashboardShell({
     </div>
   );
 }
+
 
