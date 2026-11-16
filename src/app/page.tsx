@@ -1,4 +1,4 @@
-﻿import NewsPreview from "@/components/home/news-preview";
+import NewsPreview from "@/components/home/news-preview";
 
 import {
   ArrowRight,
@@ -511,11 +511,3 @@ export default function Home() {
     </main>
   );
 }
-
-
-
-
-
-
-
-
