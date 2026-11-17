@@ -227,7 +227,7 @@ export default function AssistPanel() {
       {open && (
         <section
           aria-label="AgriVanta Assist chat"
-          className="fixed bottom-4 right-4 z-[90] flex h-[min(680px,calc(100dvh-32px))] w-[min(420px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-[#DDE5DA] bg-white shadow-2xl"
+          className="fixed bottom-2 right-2 z-[90] flex h-[min(680px,calc(100dvh-16px))] w-[min(420px,calc(100vw-16px))] flex-col sm:bottom-4 sm:right-4 sm:h-[min(680px,calc(100dvh-32px))] sm:w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-[#DDE5DA] bg-white shadow-2xl"
         >
           <header className="flex items-center justify-between bg-[#17472D] px-4 py-4 text-white">
             <div className="flex items-center gap-3">
@@ -315,7 +315,7 @@ export default function AssistPanel() {
             </div>
           )}
 
-          <div className="flex-1 space-y-4 overflow-y-auto bg-[#FAFCF9] p-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#FAFCF9] p-3 sm:p-4">
             {historyLoading ? (
               <div className="flex h-full items-center justify-center text-sm text-[#748174]">
                 <LoaderCircle size={18} className="mr-2 animate-spin" />
@@ -395,7 +395,7 @@ export default function AssistPanel() {
                 rows={1}
                 maxLength={10000}
                 disabled={loading}
-                className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#263B2B] outline-none placeholder:text-[#98A397] disabled:opacity-60"
+                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#263B2B] outline-none placeholder:text-[#98A397] disabled:opacity-60"
               />
 
               <button
