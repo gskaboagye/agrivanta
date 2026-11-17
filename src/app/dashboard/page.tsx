@@ -81,40 +81,7 @@ function BuyerDashboard({
   const firstName = name.trim().split(/\s+/)[0] || "there";
 
   return (
-    <main className="min-h-screen bg-[#F8F6EE] text-[#193D2A]">
-      <header className="border-b border-[#E2E5DA] bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#17472D] text-[#D9A441]">
-              <ShoppingBag size={23} />
-            </span>
-            <span>
-              <span className="block text-xl font-extrabold">AgriVanta</span>
-              <span className="block text-xs text-[#718071]">
-                Buyer dashboard
-              </span>
-            </span>
-          </Link>
-
-          <nav className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/products"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-3 py-2.5 text-sm font-bold text-white transition hover:bg-[#235B3A] sm:px-4"
-            >
-              <Search size={16} />
-              <span>Marketplace</span>
-            </Link>
-
-            <Link
-              href="/dashboard/profile"
-              aria-label="Profile and contact settings"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#D9DED4] bg-white text-[#17472D] transition hover:bg-[#F1F2E8]"
-            >
-              <UserRound size={18} />
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <main className="min-w-0 bg-[#F8F6EE] text-[#193D2A]">
 
       <section className="bg-[#17472D] px-4 py-10 text-white sm:px-6 sm:py-14 lg:px-8">
         <div className="mx-auto max-w-7xl">

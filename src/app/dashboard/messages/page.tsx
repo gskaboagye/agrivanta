@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -93,8 +93,8 @@ export default function MessagesPage() {
   }, [loadConversations]);
 
   return (
-    <main className="min-h-screen bg-[#F8F6EE] px-4 py-8 text-[#203B2A] sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-4xl">
+    <main className="min-h-full min-w-0 bg-[#F8F6EE] px-3 py-5 text-[#203B2A] sm:px-6 sm:py-8 lg:px-10">
+      <div className="mx-auto w-full min-w-0 max-w-4xl">
 
         <Link
           href="/dashboard"
@@ -134,7 +134,7 @@ export default function MessagesPage() {
           </button>
         </header>
 
-        <div className="mt-6 flex items-center justify-between rounded-xl border border-[#E0E5D9] bg-white p-4">
+        <div className="mt-6 flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#E0E5D9] bg-white p-3 sm:p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
               <Inbox size={20} />
@@ -176,7 +176,7 @@ export default function MessagesPage() {
         )}
 
         {loading ? (
-          <div className="mt-8 flex min-h-48 items-center justify-center gap-3 rounded-2xl border border-[#E0E5D9] bg-white p-12 text-sm text-[#68776A]">
+          <div className="mt-6 flex min-h-48 items-center justify-center gap-3 rounded-2xl border border-[#E0E5D9] bg-white p-6 text-sm text-[#68776A] sm:mt-8 sm:p-12">
             <LoaderCircle
               className="animate-spin"
               size={20}
@@ -211,7 +211,7 @@ export default function MessagesPage() {
               <Link
                 key={inquiry.id}
                 href={`/dashboard/messages/${encodeURIComponent(inquiry.id)}`}
-                className="group flex items-center gap-4 rounded-2xl border border-[#E0E5D9] bg-white p-5 transition hover:border-[#B9CBB2] hover:shadow-sm"
+                className="group flex min-w-0 items-start gap-3 rounded-2xl border border-[#E0E5D9] bg-white p-3 transition hover:border-[#B9CBB2] hover:shadow-sm sm:items-center sm:gap-4 sm:p-5"
               >
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D] transition group-hover:bg-[#17472D] group-hover:text-white">
                   <MessageCircle size={22} />
@@ -236,7 +236,7 @@ export default function MessagesPage() {
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-[#68776A]">
+                  <p className="mt-1 break-words text-xs leading-5 text-[#68776A]">
                     Participants: {inquiry.buyerName || "AgriVanta user"} and {inquiry.sellerName || "AgriVanta user"}
                   </p>
 

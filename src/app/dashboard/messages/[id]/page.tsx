@@ -248,8 +248,8 @@ function ConversationContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F6EE] px-4 py-8 text-[#203B2A] sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-4xl">
+    <main className="min-h-full min-w-0 bg-[#F8F6EE] px-3 py-5 text-[#203B2A] sm:px-6 sm:py-8 lg:px-10">
+      <div className="mx-auto w-full min-w-0 max-w-4xl">
         <Link
           href="/dashboard/messages"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#52705A] hover:text-[#17472D]"
@@ -259,7 +259,7 @@ function ConversationContent() {
         </Link>
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-[#E0E5D9] bg-white">
-          <header className="border-b border-[#E0E5D9] p-5 sm:p-6">
+          <header className="border-b border-[#E0E5D9] p-3 sm:p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
                 <MessageCircle size={21} />
@@ -270,7 +270,7 @@ function ConversationContent() {
                   {conversation?.participantName ?? "Conversation"}
                 </h1>
 
-                <p className="mt-1 text-sm text-[#68776A]">
+                <p className="mt-1 break-words text-sm leading-5 text-[#68776A]">
                   {conversation?.listingTitle ?? "Loading listing..."}
                 </p>
               </div>
@@ -309,7 +309,7 @@ function ConversationContent() {
           <section
             aria-label="Conversation messages"
             aria-live="polite"
-            className="flex min-h-72 flex-col gap-4 bg-[#FBFCF9] p-4 sm:p-6"
+            className="flex min-h-[50dvh] flex-col gap-3 bg-[#FBFCF9] p-3 sm:min-h-72 sm:gap-4 sm:p-6"
           >
             {loading ? (
               <div className="flex flex-1 items-center justify-center gap-3 text-sm text-[#68776A]">
@@ -354,7 +354,7 @@ function ConversationContent() {
                 return (
                   <article
                     key={message.id}
-                    className={`max-w-[90%] rounded-2xl border p-4 sm:max-w-[75%] ${
+                    className={`w-fit max-w-[92%] min-w-0 rounded-2xl border p-3 sm:max-w-[75%] sm:p-4 ${
                       isOwnMessage
                         ? "self-end border-[#17472D] bg-[#17472D] text-white"
                         : "self-start border-[#E0E5D9] bg-white text-[#435746]"
@@ -403,7 +403,7 @@ function ConversationContent() {
           {conversation && (
             <form
               onSubmit={sendMessage}
-              className="border-t border-[#E0E5D9] p-4 sm:p-5"
+              className="border-t border-[#E0E5D9] p-3 sm:p-5"
             >
               <label
                 htmlFor="message"
@@ -422,10 +422,10 @@ function ConversationContent() {
                 rows={3}
                 required
                 placeholder="Write your message..."
-                className="w-full resize-y rounded-xl border border-[#D9E1D5] bg-white p-3 text-sm outline-none focus:border-[#17472D]"
+                className="block w-full min-w-0 resize-y rounded-xl border border-[#D9E1D5] bg-white p-3 text-sm outline-none focus:border-[#17472D]"
               />
 
-              <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs text-[#879084]">
                   {draft.length}/3000 characters
                 </span>

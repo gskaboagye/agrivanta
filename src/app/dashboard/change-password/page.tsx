@@ -115,7 +115,7 @@ export default function ChangePasswordPage() {
             autoComplete={autoComplete}
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="w-full rounded-xl border border-[#dfe5da] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+            className="block w-full min-w-0 rounded-xl border border-[#dfe5da] px-3 py-3 pr-12 text-sm outline-none transition focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10 sm:px-4"
           />
           <button
             type="button"
@@ -131,8 +131,8 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F8F4] px-4 py-8 text-[#243629] sm:px-7 lg:px-10">
-      <div className="mx-auto max-w-2xl">
+    <main className="min-h-full min-w-0 bg-[#F7F8F4] px-3 py-5 text-[#243629] sm:px-7 sm:py-8 lg:px-10">
+      <div className="mx-auto w-full min-w-0 max-w-2xl">
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#17472D] hover:underline"
@@ -141,8 +141,8 @@ export default function ChangePasswordPage() {
           Back to dashboard
         </Link>
 
-        <header className="mt-6 rounded-3xl bg-[#17472D] p-6 text-white sm:p-8">
-          <div className="flex items-center gap-3">
+        <header className="mt-5 min-w-0 rounded-2xl bg-[#17472D] p-4 text-white sm:mt-6 sm:rounded-3xl sm:p-8">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
               <KeyRound size={25} />
             </span>
@@ -150,7 +150,7 @@ export default function ChangePasswordPage() {
               <p className="text-xs font-medium uppercase tracking-widest text-white/65">
                 Account security
               </p>
-              <h1 className="mt-1 text-2xl font-bold">Change password</h1>
+              <h1 className="mt-1 break-words text-xl font-bold sm:text-2xl">Change password</h1>
             </div>
           </div>
 
@@ -160,8 +160,8 @@ export default function ChangePasswordPage() {
           </p>
         </header>
 
-        <section className="mt-6 rounded-2xl border border-[#e5e9e0] bg-white p-5 sm:p-7">
-          <div className="flex items-center gap-3">
+        <section className="mt-5 min-w-0 rounded-2xl border border-[#e5e9e0] bg-white p-3 sm:mt-6 sm:p-7">
+          <div className="flex min-w-0 items-center gap-3">
             <LockKeyhole size={21} className="text-[#17472D]" />
             <div>
               <h2 className="text-base font-bold">Password details</h2>
@@ -172,7 +172,7 @@ export default function ChangePasswordPage() {
           </div>
 
           {success ? (
-            <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-5">
+            <div className="mt-6 min-w-0 rounded-xl border border-green-200 bg-green-50 p-4 sm:p-5">
               <CheckCircle2 size={25} className="text-green-700" />
               <h3 className="mt-3 font-bold text-green-800">
                 Password changed successfully
@@ -184,13 +184,13 @@ export default function ChangePasswordPage() {
               </p>
               <Link
                 href="/login"
-                className="mt-4 inline-flex items-center justify-center rounded-xl bg-[#17472D] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#103921]"
+                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[#17472D] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#103921] sm:w-auto"
               >
                 Go to login
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            <form onSubmit={handleSubmit} className="mt-6 min-w-0 space-y-5">
               <PasswordField
                 label="Current password"
                 value={currentPassword}
@@ -218,7 +218,7 @@ export default function ChangePasswordPage() {
                 autoComplete="new-password"
               />
 
-              <div className="flex gap-3 rounded-xl bg-[#F8F6EE] p-4">
+              <div className="flex min-w-0 gap-3 rounded-xl bg-[#F8F6EE] p-3 sm:p-4">
                 <ShieldCheck
                   size={19}
                   className="mt-0.5 shrink-0 text-[#806020]"

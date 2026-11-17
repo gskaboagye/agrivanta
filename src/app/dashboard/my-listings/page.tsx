@@ -412,8 +412,8 @@ export default function MyListingsPage() {
   });
 
   return (
-    <main className="min-h-screen bg-[#F7F8F4] px-4 py-8 text-[#243629] sm:px-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-full min-w-0 bg-[#F7F8F4] px-3 py-5 text-[#243629] sm:px-8 sm:py-8">
+      <div className="mx-auto w-full min-w-0 max-w-6xl">
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#17472D] hover:underline"
@@ -422,12 +422,12 @@ export default function MyListingsPage() {
           Back to dashboard
         </Link>
 
-        <header className="mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+        <header className="mt-5 flex min-w-0 flex-col justify-between gap-4 sm:mt-6 sm:flex-row sm:items-end sm:gap-5">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9a8450]">
               Your workspace
             </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#17472D]">
+            <h1 className="mt-2 break-words text-2xl font-bold tracking-tight text-[#17472D] sm:text-3xl">
               My Listings
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-[#758071]">
@@ -437,25 +437,25 @@ export default function MyListingsPage() {
 
           <Link
             href="/products"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#103921]"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#103921] sm:w-auto"
           >
             <Package size={17} />
             Marketplace
           </Link>
         </header>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[#e5e9e0] bg-white p-5">
+        <section className="mt-6 grid min-w-0 grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
+          <div className="min-w-0 rounded-2xl border border-[#e5e9e0] bg-white p-4 sm:p-5">
             <p className="text-xs text-[#879084]">Total listings</p>
             <p className="mt-2 text-3xl font-bold text-[#17472D]">{listings.length}</p>
           </div>
-          <div className="rounded-2xl border border-[#e5e9e0] bg-white p-5">
+          <div className="min-w-0 rounded-2xl border border-[#e5e9e0] bg-white p-4 sm:p-5">
             <p className="text-xs text-[#879084]">Active</p>
             <p className="mt-2 text-3xl font-bold text-[#17472D]">
               {listings.filter((item) => item.status === "active").length}
             </p>
           </div>
-          <div className="rounded-2xl border border-[#e5e9e0] bg-white p-5">
+          <div className="min-w-0 rounded-2xl border border-[#e5e9e0] bg-white p-4 sm:p-5">
             <p className="text-xs text-[#879084]">Listing types</p>
             <p className="mt-2 text-3xl font-bold text-[#17472D]">
               {new Set(listings.map((item) => item.type)).size}
@@ -463,14 +463,14 @@ export default function MyListingsPage() {
           </div>
         </section>
 
-        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6 flex min-w-0 flex-col gap-3 sm:mt-7 sm:flex-row">
           <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-[#e1e7dc] bg-white px-3">
             <Search size={17} className="text-[#879084]" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search your listings"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-[#9ba396]"
+              className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[#9ba396]"
             />
           </label>
 
@@ -533,9 +533,9 @@ export default function MyListingsPage() {
                 return (
                   <article
                     key={listing.id}
-                    className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5"
+                    className="flex min-w-0 flex-col gap-3 p-3 sm:gap-4 sm:p-5 md:flex-row md:items-center"
                   >
-                    <div className="flex h-20 w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#EAF0E6] sm:w-24">
+                    <div className="flex h-36 w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#EAF0E6] sm:h-24 sm:w-24">
                       {preview && (preview.type === "video" || preview.resource_type === "video") ? (
                         <span className="flex flex-col items-center gap-1 text-[#17472D]">
                           <FileVideo size={27} />
@@ -562,7 +562,7 @@ export default function MyListingsPage() {
                           {listing.status}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-[#879084]">
+                      <p className="mt-1 break-words text-xs leading-5 text-[#879084]">
                         {listing.category}{listing.subcategory ? ` / ${listing.subcategory}` : ""} · {listing.location} · {listing.type}
                       </p>
                       <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#697568]">
@@ -575,7 +575,7 @@ export default function MyListingsPage() {
                         {listing.priceUnit}
                       </p>
                       {media.length > 0 && (
-                        <p className="mt-1 text-xs text-[#879084]">
+                        <p className="mt-1 break-words text-xs leading-5 text-[#879084]">
                           {media.filter((item) => item.type !== "video" && item.resource_type !== "video").length} image(s)
                           {" · "}
                           {media.filter((item) => item.type === "video" || item.resource_type === "video").length} video(s)
@@ -583,11 +583,11 @@ export default function MyListingsPage() {
                       )}
                     </div>
 
-                    <div className="flex shrink-0 gap-2 sm:flex-col">
+                    <div className="flex w-full min-w-0 gap-2 sm:w-auto sm:shrink-0 sm:flex-col">
                       <button
                         type="button"
                         onClick={() => openEditor(listing)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#e1e7dc] px-3 py-2 text-xs font-semibold text-[#17472D] hover:bg-[#f1f5ed]"
+                        className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-[#e1e7dc] px-3 py-2.5 text-xs font-semibold text-[#17472D] hover:bg-[#f1f5ed] sm:flex-none"
                       >
                         <Pencil size={14} />
                         Edit / Media
@@ -596,7 +596,7 @@ export default function MyListingsPage() {
                         type="button"
                         disabled={busyId === listing.id}
                         onClick={() => void deleteListing(listing)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-100 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-red-100 px-3 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 sm:flex-none"
                       >
                         {busyId === listing.id ? (
                           <LoaderCircle size={14} className="animate-spin" />
@@ -614,15 +614,15 @@ export default function MyListingsPage() {
         )}
 
         {editing && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-5">
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-2 sm:items-center sm:p-5">
             <form
               onSubmit={saveListing}
-              className="my-5 max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-7"
+              className="my-2 max-h-[calc(100dvh-16px)] w-full min-w-0 max-w-2xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-3 shadow-xl sm:my-5 sm:max-h-[94vh] sm:p-7"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-[#17472D]">Edit listing</h2>
-                  <p className="mt-1 text-xs text-[#879084]">
+                  <p className="mt-1 break-words text-xs leading-5 text-[#879084]">
                     Update details and manage your product photos and videos.
                   </p>
                 </div>
@@ -665,7 +665,7 @@ export default function MyListingsPage() {
                             : current
                         )
                       }
-                      className="w-full rounded-xl border border-[#e1e7dc] px-3 py-2.5 text-sm outline-none focus:border-[#17472D]"
+                      className="block w-full min-w-0 rounded-xl border border-[#e1e7dc] px-3 py-2.5 text-sm outline-none focus:border-[#17472D]"
                     />
                   </label>
                 ))}
@@ -685,7 +685,7 @@ export default function MyListingsPage() {
                     value={specificationsText}
                     onChange={(event) => setSpecificationsText(event.target.value)}
                     placeholder={'{\n  "capacity": "100 kg",\n  "material": "Steel"\n}'}
-                    className="w-full rounded-xl border border-[#e1e7dc] bg-white px-3 py-2.5 font-mono text-xs outline-none focus:border-[#17472D]"
+                    className="block w-full min-w-0 rounded-xl border border-[#e1e7dc] bg-white px-3 py-2.5 font-mono text-xs outline-none focus:border-[#17472D]"
                   />
                 </label>
               </section>
@@ -705,7 +705,7 @@ export default function MyListingsPage() {
                         : current
                     )
                   }
-                  className="w-full rounded-xl border border-[#e1e7dc] px-3 py-2.5 text-sm outline-none focus:border-[#17472D]"
+                  className="block w-full min-w-0 rounded-xl border border-[#e1e7dc] px-3 py-2.5 text-sm outline-none focus:border-[#17472D]"
                 />
               </label>
 
@@ -819,7 +819,7 @@ export default function MyListingsPage() {
                     <p className="mt-2 text-sm font-semibold text-[#526252]">
                       No media attached
                     </p>
-                    <p className="mt-1 text-xs text-[#879084]">
+                    <p className="mt-1 break-words text-xs leading-5 text-[#879084]">
                       Upload clear photos to help buyers understand your product.
                     </p>
                   </div>

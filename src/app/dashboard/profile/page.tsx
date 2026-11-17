@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -276,7 +276,7 @@ export default function ProfileSettingsPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#F7F8F4]">
+      <main className="flex min-h-[50dvh] min-w-0 items-center justify-center bg-[#F7F8F4]">
         <div className="flex items-center gap-3 text-sm text-[#526252]">
           <LoaderCircle className="animate-spin" size={20} />
           Loading your profile...
@@ -286,8 +286,8 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F8F4] px-4 py-8 text-[#243629] sm:px-7 lg:px-10">
-      <div className="mx-auto max-w-3xl">
+    <main className="min-h-full min-w-0 bg-[#F7F8F4] px-3 py-5 text-[#243629] sm:px-7 sm:py-8 lg:px-10">
+      <div className="mx-auto w-full min-w-0 max-w-3xl">
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#17472D] hover:underline"
@@ -296,7 +296,7 @@ export default function ProfileSettingsPage() {
           Back to dashboard
         </Link>
 
-        <header className="mt-6 rounded-3xl bg-[#17472D] p-6 text-white sm:p-8">
+        <header className="mt-5 min-w-0 rounded-2xl bg-[#17472D] p-4 text-white sm:mt-6 sm:rounded-3xl sm:p-8">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
               <UserRound size={25} />
@@ -316,7 +316,7 @@ export default function ProfileSettingsPage() {
         </header>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-          <section className="rounded-2xl border border-[#e5e9e0] bg-white p-5 sm:p-7">
+          <section className="min-w-0 rounded-2xl border border-[#e5e9e0] bg-white p-4 sm:p-7">
             <h2 className="text-base font-bold">Personal information</h2>
             <p className="mt-1 text-sm text-[#879084]">
               Your email and account type cannot be changed here.
@@ -335,7 +335,7 @@ export default function ProfileSettingsPage() {
                   onChange={(event) =>
                     updateField("name", event.target.value)
                   }
-                  className="w-full rounded-xl border border-[#dfe5da] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                  className="block w-full min-w-0 rounded-xl border border-[#dfe5da] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
                 />
               </label>
 
@@ -346,7 +346,7 @@ export default function ProfileSettingsPage() {
                 <input
                   readOnly
                   value={profile.email}
-                  className="w-full rounded-xl border border-[#e8ebe4] bg-[#f7f8f4] px-4 py-3 text-sm text-[#778071]"
+                  className="block w-full min-w-0 rounded-xl border border-[#e8ebe4] bg-[#f7f8f4] px-4 py-3 text-sm text-[#778071]"
                 />
               </label>
 
@@ -361,7 +361,7 @@ export default function ProfileSettingsPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[#e5e9e0] bg-white p-5 sm:p-7">
+          <section className="min-w-0 rounded-2xl border border-[#e5e9e0] bg-white p-4 sm:p-7">
             <div className="flex items-center gap-3">
               <Phone size={21} className="text-[#17472D]" />
               <div>
@@ -421,7 +421,7 @@ export default function ProfileSettingsPage() {
                 aria-invalid={Boolean(phoneError)}
                 aria-describedby={phoneError ? "phone-error" : undefined}
                 placeholder="+233 24 123 4567"
-                className="w-full rounded-xl border border-[#dfe5da] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                className="block w-full min-w-0 rounded-xl border border-[#dfe5da] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
               />
               {phoneError && (
                 <span id="phone-error" className="mt-1 block text-xs text-red-600">
@@ -431,7 +431,7 @@ export default function ProfileSettingsPage() {
             </label>
 
             {profile.phone.trim() && (
-              <div className="mt-4 rounded-xl border border-[#e5e9e0] p-4">
+              <div className="mt-4 min-w-0 rounded-xl border border-[#e5e9e0] p-3 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck
@@ -633,7 +633,7 @@ export default function ProfileSettingsPage() {
               )}
             </div>
 
-            <div className="mt-5 flex gap-3 rounded-xl bg-[#F8F6EE] p-4">
+            <div className="mt-5 flex min-w-0 items-start gap-3 rounded-xl bg-[#F8F6EE] p-3 sm:p-4">
               <LockKeyhole size={19} className="mt-0.5 shrink-0 text-[#806020]" />
               <p className="text-xs leading-5 text-[#6f6958]">
                 Public phone contact, WhatsApp contact, and SMS notifications

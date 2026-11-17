@@ -415,11 +415,11 @@ export default function CreateListingPage() {
   }
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-[#DCE3D6] bg-white px-4 py-3 text-sm text-[#243629] outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10";
+    "mt-2 block w-full min-w-0 rounded-xl border border-[#DCE3D6] bg-white px-3 py-3 text-sm text-[#243629] outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10 sm:px-4";
 
   if (profileLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#F7F8F4] px-4 text-[#243629]">
+      <main className="flex min-h-[50dvh] min-w-0 items-center justify-center bg-[#F7F8F4] px-3 text-[#243629] sm:px-4">
         <div className="flex items-center gap-3 rounded-xl bg-white p-6 shadow-sm">
           <LoaderCircle className="animate-spin text-[#17472D]" size={22} />
           <p className="text-sm font-medium">Verifying your account...</p>
@@ -432,8 +432,8 @@ export default function CreateListingPage() {
     const isBuyer = accountRole === "buyer";
 
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#F7F8F4] px-4 py-8 text-[#243629]">
-        <section className="w-full max-w-lg rounded-2xl border border-[#E5E9E0] bg-white p-8 text-center shadow-sm">
+      <main className="flex min-h-[60dvh] min-w-0 items-center justify-center bg-[#F7F8F4] px-3 py-6 text-[#243629] sm:px-4 sm:py-8">
+        <section className="w-full min-w-0 max-w-lg rounded-2xl border border-[#E5E9E0] bg-white p-5 text-center shadow-sm sm:p-8">
           <h1 className="text-2xl font-extrabold text-[#17472D]">
             {isBuyer ? "Listing creation unavailable" : "Unable to create a listing"}
           </h1>
@@ -453,8 +453,8 @@ export default function CreateListingPage() {
     );
   }
   return (
-    <main className="min-h-screen bg-[#F7F8F4] px-4 py-8 text-[#243629] sm:px-8">
-      <div className="mx-auto max-w-4xl">
+    <main className="min-h-full min-w-0 bg-[#F7F8F4] px-3 py-5 text-[#243629] sm:px-8 sm:py-8">
+      <div className="mx-auto w-full min-w-0 max-w-4xl">
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#17472D] hover:underline"
@@ -463,12 +463,12 @@ export default function CreateListingPage() {
           Back to dashboard
         </Link>
 
-        <header className="mb-8 mt-6">
+        <header className="mb-6 mt-5 sm:mb-8 sm:mt-6">
           <p className="text-xs font-bold uppercase tracking-widest text-[#9A8450]">
             AgriVanta Marketplace
           </p>
 
-          <h1 className="mt-2 text-3xl font-extrabold text-[#17472D]">
+          <h1 className="mt-2 break-words text-2xl font-extrabold text-[#17472D] sm:text-3xl">
             Create a listing
           </h1>
 
@@ -479,14 +479,14 @@ export default function CreateListingPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-7 rounded-2xl border border-[#E5E9E0] bg-white p-5 shadow-sm sm:p-8"
+          className="min-w-0 space-y-6 rounded-2xl border border-[#E5E9E0] bg-white p-3 shadow-sm sm:space-y-7 sm:p-8"
         >
           <section>
             <h2 className="text-lg font-bold text-[#17472D]">
               What would you like to list?
             </h2>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               {listingOptions
                 .filter((option) => permittedTypes.includes(option.type))
                 .map((option) => (
@@ -509,7 +509,7 @@ export default function CreateListingPage() {
             </div>
           </section>
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
             <label className="text-sm font-semibold">
               Listing title *
               <input
@@ -626,7 +626,7 @@ export default function CreateListingPage() {
             </label>
           </section>
 
-          <section className="rounded-xl border border-[#E5E9E0] p-5">
+          <section className="min-w-0 rounded-xl border border-[#E5E9E0] p-3 sm:p-5">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div>
                 <h2 className="flex items-center gap-2 font-bold text-[#17472D]">
@@ -643,7 +643,7 @@ export default function CreateListingPage() {
                 type="button"
                 disabled={uploading || media.length >= MAX_FILES}
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-3 text-sm font-semibold text-white hover:bg-[#103921] disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-3 text-sm font-semibold text-white hover:bg-[#103921] disabled:opacity-50 sm:w-auto"
               >
                 {uploading ? (
                   <LoaderCircle size={17} className="animate-spin" />
@@ -684,7 +684,7 @@ export default function CreateListingPage() {
             )}
 
             {media.length > 0 && (
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="mt-5 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
                 {media.map((item, index) => {
                   const video =
                     item.type === "video" || item.resource_type === "video";
@@ -735,7 +735,7 @@ export default function CreateListingPage() {
             </div>
           )}
 
-          <div className="flex flex-col-reverse gap-3 border-t border-[#E5E9E0] pt-6 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 border-t border-[#E5E9E0] pt-5 sm:flex-row sm:justify-end sm:pt-6">
             <Link
               href="/dashboard/my-listings"
               className="rounded-xl border border-[#DCE3D6] px-5 py-3 text-center text-sm font-semibold text-[#526252] hover:bg-[#F7F8F4]"
@@ -746,7 +746,7 @@ export default function CreateListingPage() {
             <button
               type="submit"
               disabled={submitting || uploading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17472D] px-6 py-3 text-sm font-bold text-white hover:bg-[#103921] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-6 py-3 text-sm font-bold text-white hover:bg-[#103921] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {submitting && (
                 <LoaderCircle size={17} className="animate-spin" />

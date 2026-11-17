@@ -302,8 +302,8 @@ export default function MyReportsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F6EE] px-4 py-8 text-[#193D2A] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <main className="min-h-full min-w-0 bg-[#F8F6EE] px-3 py-5 text-[#193D2A] sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto w-full min-w-0 max-w-7xl">
         <Link
           href="/dashboard"
           className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-[#58705E] transition hover:text-[#17472D]"
@@ -312,7 +312,7 @@ export default function MyReportsPage() {
           Back to dashboard
         </Link>
 
-        <section className="overflow-hidden rounded-3xl bg-[#17472D] p-6 text-white shadow-sm sm:p-9">
+        <section className="min-w-0 overflow-hidden rounded-2xl bg-[#17472D] p-4 text-white shadow-sm sm:rounded-3xl sm:p-9">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
             <div className="max-w-2xl">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-[#E6BD57]">
@@ -337,7 +337,7 @@ export default function MyReportsPage() {
                 setError("");
                 setSuccess("");
               }}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#D9A441] px-5 py-3 text-sm font-bold text-[#173B27] transition hover:bg-[#E7B958]"
+              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#D9A441] px-5 py-3 text-sm font-bold text-[#173B27] transition hover:bg-[#E7B958] sm:w-auto"
             >
               {showForm ? <X size={18} /> : <Plus size={18} />}
               {showForm ? "Close form" : "Submit a report"}
@@ -373,7 +373,7 @@ export default function MyReportsPage() {
         )}
 
         {showForm && (
-          <section className="mt-6 rounded-2xl border border-[#E0E5D9] bg-white p-5 shadow-sm sm:p-7">
+          <section className="mt-6 min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-3 shadow-sm sm:p-7">
             <div className="mb-6">
               <h2 className="text-xl font-extrabold">Submit a new report</h2>
               <p className="mt-1 text-sm leading-6 text-[#718071]">
@@ -391,7 +391,7 @@ export default function MyReportsPage() {
                   value={category}
                   onChange={(event) => setCategory(event.target.value)}
                   required
-                  className="w-full rounded-xl border border-[#D9DED4] bg-white px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                  className="block w-full min-w-0 rounded-xl border border-[#D9DED4] bg-white px-3 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10 sm:px-4"
                 >
                   {categories.map((item) => (
                     <option key={item} value={item}>{item}</option>
@@ -411,7 +411,7 @@ export default function MyReportsPage() {
                   maxLength={120}
                   required
                   placeholder="Briefly describe the issue"
-                  className="w-full rounded-xl border border-[#D9DED4] px-4 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                  className="block w-full min-w-0 rounded-xl border border-[#D9DED4] px-3 py-3 text-sm outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10 sm:px-4"
                 />
                 <p className="mt-1 text-xs text-[#879084]">3–120 characters.</p>
               </div>
@@ -429,7 +429,7 @@ export default function MyReportsPage() {
                   required
                   rows={6}
                   placeholder="Explain what happened, when it happened, and any details that may help our team."
-                  className="w-full resize-y rounded-xl border border-[#D9DED4] px-4 py-3 text-sm leading-6 outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                  className="block w-full min-w-0 resize-y rounded-xl border border-[#D9DED4] px-3 py-3 text-sm leading-6 outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10 sm:px-4"
                 />
                 <p className="mt-1 text-xs text-[#879084]">
                   {description.length}/3000 characters. Minimum 10.
@@ -448,7 +448,7 @@ export default function MyReportsPage() {
                       setEntityType(event.target.value as typeof entityType);
                       setEntityId("");
                     }}
-                    className="w-full rounded-xl border border-[#D9DED4] bg-white px-4 py-3 text-sm outline-none focus:border-[#17472D]"
+                    className="block w-full min-w-0 rounded-xl border border-[#D9DED4] bg-white px-3 py-3 text-sm outline-none focus:border-[#17472D] sm:px-4"
                   >
                     <option value="platform">AgriVanta platform</option>
                     <option value="listing">A marketplace listing</option>
@@ -467,7 +467,7 @@ export default function MyReportsPage() {
                       onChange={(event) => setEntityId(event.target.value)}
                       required
                       placeholder="Enter the listing ID"
-                      className="w-full rounded-xl border border-[#D9DED4] px-4 py-3 text-sm outline-none focus:border-[#17472D]"
+                      className="block w-full min-w-0 rounded-xl border border-[#D9DED4] px-3 py-3 text-sm outline-none focus:border-[#17472D] sm:px-4"
                     />
                     <p className="mt-1 text-xs text-[#879084]">
                       Enter the ID of the marketplace listing you are reporting.
@@ -517,7 +517,7 @@ export default function MyReportsPage() {
                             }}
                             autoComplete="off"
                             placeholder="Type the user's name..."
-                            className="w-full rounded-xl border border-[#D9DED4] py-3 pl-10 pr-4 text-sm outline-none focus:border-[#17472D]"
+                            className="block w-full min-w-0 rounded-xl border border-[#D9DED4] py-3 pl-10 pr-3 text-sm outline-none focus:border-[#17472D] sm:pr-4"
                           />
                         </div>
 
@@ -548,7 +548,7 @@ export default function MyReportsPage() {
                                   setUserSearch(user.name);
                                   setUserResults([]);
                                 }}
-                                className="flex w-full items-center justify-between gap-3 border-b border-[#EDF0E9] px-4 py-3 text-left last:border-b-0 hover:bg-[#F3F8F2]"
+                                className="flex w-full min-w-0 items-center justify-between gap-3 border-b border-[#EDF0E9] px-4 py-3 text-left last:border-b-0 hover:bg-[#F3F8F2]"
                               >
                                 <span className="font-semibold text-[#193D2A]">
                                   {user.name}
@@ -572,18 +572,18 @@ export default function MyReportsPage() {
                 not automatically suspend another account.
               </div>
 
-              <div className="flex flex-wrap justify-end gap-3 border-t border-[#EDF0E9] pt-5">
+              <div className="flex flex-col-reverse gap-3 border-t border-[#EDF0E9] pt-5 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="rounded-xl border border-[#D9DED4] px-5 py-3 text-sm font-semibold text-[#536453] hover:bg-[#F7F8F4]"
+                  className="w-full rounded-xl border border-[#D9DED4] px-5 py-3 text-center text-sm font-semibold text-[#536453] hover:bg-[#F7F8F4] sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17472D] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {submitting ? (
                     <LoaderCircle size={17} className="animate-spin" />
@@ -598,7 +598,7 @@ export default function MyReportsPage() {
         )}
 
         <section className="mt-8">
-          <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div className="mb-5 flex min-w-0 flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#9B741F]">
                 Your submissions
@@ -631,7 +631,7 @@ export default function MyReportsPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-[#E0E5D9] bg-white shadow-sm">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-[#E0E5D9] bg-white shadow-sm">
             {loading ? (
               <div className="flex items-center justify-center gap-3 p-12 text-sm text-[#718071]">
                 <LoaderCircle size={20} className="animate-spin" />
@@ -676,7 +676,7 @@ export default function MyReportsPage() {
               <>
                 <div className="divide-y divide-[#EDF0E9]">
                   {filteredReports.map((report) => (
-                    <article key={report.reportId} className="p-5 transition hover:bg-[#FCFCF9] sm:p-6">
+                    <article key={report.reportId} className="min-w-0 p-3 transition hover:bg-[#FCFCF9] sm:p-6">
                       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -687,7 +687,7 @@ export default function MyReportsPage() {
                               {statusLabel(report.status)}
                             </span>
                           </div>
-                          <h3 className="mt-3 text-base font-extrabold text-[#193D2A]">
+                          <h3 className="mt-3 break-words text-base font-extrabold text-[#193D2A]">
                             {report.subject}
                           </h3>
                           <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#718071]">
@@ -706,7 +706,7 @@ export default function MyReportsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="shrink-0 text-left sm:text-right">
+                        <div className="min-w-0 text-left sm:shrink-0 sm:text-right">
                           <p className="text-xs text-[#879084]">Last updated</p>
                           <p className="mt-1 text-sm font-semibold text-[#536453]">
                             {formatDate(report.updatedAt || report.createdAt)}
@@ -769,7 +769,7 @@ export default function MyReportsPage() {
                   ))}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EDF0E9] bg-[#FCFCF9] px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EDF0E9] bg-[#FCFCF9] px-3 py-4 sm:px-5">
                   <p className="text-xs text-[#718071]">
                     Page {page} of {totalPages}
                   </p>

@@ -235,8 +235,8 @@ export default function InquiriesPage() {
   ).length;
 
   return (
-    <main className="min-h-screen bg-[#F8F6EE] px-4 py-8 text-[#203B2A] sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-5xl">
+    <main className="min-h-full min-w-0 bg-[#F8F6EE] px-3 py-5 text-[#203B2A] sm:px-6 sm:py-8 lg:px-10">
+      <div className="mx-auto w-full min-w-0 max-w-5xl">
         <Link
           href="/dashboard"
           className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-[#52705A] transition hover:text-[#17472D]"
@@ -245,7 +245,7 @@ export default function InquiriesPage() {
           Back to dashboard
         </Link>
 
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <header className="mb-6 flex min-w-0 flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#9A762C]">
               AgriVanta marketplace
@@ -275,8 +275,8 @@ export default function InquiriesPage() {
           </button>
         </header>
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[#E0E5D9] bg-white p-5">
+        <section className="mb-5 grid min-w-0 grid-cols-1 gap-3 sm:mb-6 sm:grid-cols-3 sm:gap-4">
+          <div className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-4 sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
               <Inbox size={20} />
             </div>
@@ -292,7 +292,7 @@ export default function InquiriesPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-[#E0E5D9] bg-white p-5">
+          <div className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-4 sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#FBF1D9] text-[#916B1F]">
               <MessageCircle size={20} />
             </div>
@@ -304,7 +304,7 @@ export default function InquiriesPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-[#E0E5D9] bg-white p-5">
+          <div className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-4 sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
               <Send size={20} />
             </div>
@@ -317,7 +317,7 @@ export default function InquiriesPage() {
           </div>
         </section>
 
-        <div className="mb-6 flex gap-2 rounded-xl border border-[#E0E5D9] bg-white p-1.5">
+        <div className="mb-6 flex flex-wrap gap-2 rounded-xl border border-[#E0E5D9] bg-white p-1.5">
           <button
             type="button"
             onClick={() => handleViewChange("received")}
@@ -424,7 +424,7 @@ export default function InquiriesPage() {
               return (
                 <article
                   key={inquiry.id}
-                  className="rounded-2xl border border-[#E0E5D9] bg-white p-5 sm:p-6"
+                  className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-3 sm:p-6"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
@@ -446,11 +446,11 @@ export default function InquiriesPage() {
                         </span>
                       </div>
 
-                      <h2 className="text-lg font-bold leading-snug">
+                      <h2 className="break-words text-base font-bold leading-snug sm:text-lg">
                         {inquiry.listingTitle}
                       </h2>
 
-                      <p className="mt-1 text-sm text-[#68776A]">
+                      <p className="mt-1 break-words text-sm leading-5 text-[#68776A]">
                         {isReceived ? "From" : "To"}{" "}
                         <span className="font-semibold text-[#344C38]">
                           {personName || "Marketplace user"}
@@ -471,7 +471,7 @@ export default function InquiriesPage() {
                   </div>
 
                   <div className="mt-5 rounded-xl bg-[#F7F8F3] p-4">
-                    <p className="whitespace-pre-wrap text-sm leading-7 text-[#435746]">
+                    <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#435746]">
                       {inquiry.message}
                     </p>
                   </div>
