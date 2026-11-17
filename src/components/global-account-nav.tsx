@@ -119,6 +119,7 @@ export default function GlobalAccountNav() {
 
     setMenuOpen(false);
     setMobileMenuOpen(false);
+    setMobileMoreOpen(false);
     void loadAccount();
 
     return () => controller.abort();
@@ -394,7 +395,10 @@ export default function GlobalAccountNav() {
           {/* Mobile menu button */}
           <button
             type="button"
-            onClick={() => setMobileMenuOpen((open) => !open)}
+            onClick={() => {
+              setMobileMenuOpen((open) => !open);
+              setMobileMoreOpen(false);
+            }}
             aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation"

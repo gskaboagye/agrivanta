@@ -129,14 +129,14 @@ function GalleryModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 sm:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-2 sm:p-6"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`${listing.title} media gallery`}
-        className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#101710] text-white shadow-2xl"
+        className="flex max-h-[calc(100dvh-1rem)] w-full min-w-0 max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#101710] text-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-6">
@@ -164,14 +164,14 @@ function GalleryModal({
               controls
               playsInline
               preload="metadata"
-              className="max-h-[58vh] max-w-full rounded-lg"
+              className="max-h-[50dvh] max-w-full rounded-lg sm:max-h-[58vh]"
             />
           ) : (
             <img
               key={activeMedia.url}
               src={activeMedia.url}
               alt={`${listing.title} image ${safeIndex + 1}`}
-              className="max-h-[58vh] max-w-full rounded-lg object-contain"
+              className="max-h-[50dvh] max-w-full rounded-lg object-contain sm:max-h-[58vh]"
             />
           )}
 
@@ -232,7 +232,7 @@ function GalleryModal({
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-sm sm:px-6">
-          <p className="flex items-center gap-2 text-white/70">
+          <p className="flex min-w-0 items-start gap-2 break-words text-white/70">
             <MapPin size={15} />
             {listing.location}
           </p>
@@ -569,8 +569,8 @@ function ProductsBrowser() {
       </div>
 
       <header className="border-b border-[#E7E4D9] bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <a href="/" className="flex items-center gap-3">
+        <div className="mx-auto flex w-full min-w-0 max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+          <a href="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#17472D] text-[#D9A441]">
               <ShoppingBag size={24} />
             </span>
@@ -585,7 +585,7 @@ function ProductsBrowser() {
             </span>
           </a>
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <a
               href="/"
               className="hidden text-sm font-semibold hover:text-[#9B741F] sm:inline"
@@ -595,7 +595,7 @@ function ProductsBrowser() {
 
             <a
               href="/register?role=seller"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#235B3A]"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#17472D] px-3 py-2.5 text-xs font-bold text-white hover:bg-[#235B3A] sm:gap-2 sm:px-4 sm:text-sm"
             >
               <Store size={16} />
               Join AgriVanta
@@ -604,17 +604,17 @@ function ProductsBrowser() {
         </div>
       </header>
 
-      <section className="bg-[#17472D] px-4 py-12 text-white sm:py-16">
-        <div className="mx-auto max-w-7xl">
+      <section className="w-full min-w-0 bg-[#17472D] px-4 py-10 text-white sm:py-16">
+        <div className="mx-auto w-full min-w-0 max-w-7xl">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E6BD57]">
             Discover agricultural opportunities
           </p>
 
-          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold sm:text-5xl">
+          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold leading-tight sm:text-5xl">
             Find what your farm needs.
           </h1>
 
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
+          <p className="mt-4 w-full max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
             Buy agricultural products, hire equipment, find farm
             labourers, or connect with agricultural professionals.
             Explore opportunities across the agricultural value chain.
@@ -622,7 +622,7 @@ function ProductsBrowser() {
 
           <form
             onSubmit={(event) => event.preventDefault()}
-            className="mt-7 flex max-w-2xl flex-col gap-2 rounded-xl bg-white p-2 sm:flex-row"
+            className="mt-7 flex w-full min-w-0 max-w-2xl flex-col gap-2 rounded-xl bg-white p-2 sm:flex-row"
           >
             <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
               <Search
@@ -653,13 +653,13 @@ function ProductsBrowser() {
 
             <button
               type="submit"
-              className="rounded-lg bg-[#D9A441] px-6 py-3 font-bold text-[#173B27] hover:bg-[#E7B958]"
+              className="w-full shrink-0 rounded-lg bg-[#D9A441] px-6 py-3 text-sm font-bold text-[#173B27] hover:bg-[#E7B958] sm:w-auto"
             >
               Search
             </button>
           </form>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() => setType("worker")}
@@ -681,8 +681,8 @@ function ProductsBrowser() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <section className="mx-auto w-full min-w-0 max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-2xl font-extrabold">
               Explore the marketplace
@@ -703,7 +703,7 @@ function ProductsBrowser() {
           </button>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 flex w-full flex-wrap gap-2">
           {typeOptions.map((option) => (
             <button
               key={option.value}
@@ -722,7 +722,7 @@ function ProductsBrowser() {
         </div>
 
         {showFilters && (
-          <div className="mt-5 grid gap-4 rounded-xl border border-[#E7E4D9] bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 rounded-xl border border-[#E7E4D9] bg-white p-3 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
             <label className="text-sm font-semibold">
               Category
               <select
@@ -833,11 +833,11 @@ function ProductsBrowser() {
             </div>
 
             {filteredListings.length > 0 ? (
-              <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-5 grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredListings.map((listing) => (
                   <article
                     key={listing.id}
-                    className="overflow-hidden rounded-xl border border-[#E7E4D9] bg-white transition hover:-translate-y-1 hover:shadow-lg"
+                    className="min-w-0 overflow-hidden rounded-xl border border-[#E7E4D9] bg-white transition hover:-translate-y-1 hover:shadow-lg"
                   >
                     <div className="relative h-52 overflow-hidden bg-[#EAF0E6]">
                       <button
@@ -893,11 +893,11 @@ function ProductsBrowser() {
                         {listing.category}
                       </p>
 
-                      <h3 className="mt-2 text-lg font-extrabold">
+                      <h3 className="mt-2 break-words text-lg font-extrabold">
                         {listing.title}
                       </h3>
 
-                      <p className="mt-2 min-h-[60px] text-sm leading-6 text-[#647367]">
+                      <p className="mt-2 min-h-[60px] break-words text-sm leading-6 text-[#647367]">
                         {listing.description}
                       </p>
 
@@ -961,12 +961,12 @@ function ProductsBrowser() {
                         </p>
                       </div>
 
-                      <p className="mt-4 flex items-center gap-2 text-sm text-[#647367]">
+                      <p className="mt-4 flex min-w-0 items-start gap-2 break-words text-sm text-[#647367]">
                         <MapPin size={16} className="shrink-0" />
                         {listing.location}
                       </p>
 
-                      <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#E7E4D9] bg-[#FAFAF6] p-3">
+                      <div className="mt-4 flex min-w-0 items-center gap-3 rounded-xl border border-[#E7E4D9] bg-[#FAFAF6] p-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF0E6] text-[#17472D]">
                           <UserRound size={20} />
                         </div>
