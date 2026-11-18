@@ -227,9 +227,9 @@ export default function AssistPanel() {
       {open && (
         <section
           aria-label="AgriVanta Assist chat"
-          className="fixed bottom-2 right-2 z-[90] flex h-[min(680px,calc(100dvh-16px))] w-[min(420px,calc(100vw-16px))] flex-col sm:bottom-4 sm:right-4 sm:h-[min(680px,calc(100dvh-32px))] sm:w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-[#DDE5DA] bg-white shadow-2xl"
+          className="fixed inset-0 z-[90] flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white pb-[env(safe-area-inset-bottom)] sm:inset-auto sm:bottom-4 sm:right-4 sm:h-[min(680px,calc(100dvh-32px))] sm:w-[min(420px,calc(100vw-32px))] sm:rounded-2xl sm:border sm:border-[#DDE5DA] sm:pb-0 sm:shadow-2xl"
         >
-          <header className="flex items-center justify-between bg-[#17472D] px-4 py-4 text-white">
+          <header className="flex shrink-0 items-center justify-between bg-[#17472D] px-4 py-4 text-white">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
                 <Bot size={23} />
@@ -252,7 +252,7 @@ export default function AssistPanel() {
             </button>
           </header>
 
-          <div className="flex items-center justify-between border-b border-[#E8EDE5] px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-b border-[#E8EDE5] px-4 py-3">
             <button
               type="button"
               onClick={() => setHistoryOpen((previous) => !previous)}
@@ -278,7 +278,7 @@ export default function AssistPanel() {
           </div>
 
           {historyOpen && (
-            <div className="max-h-52 overflow-y-auto border-b border-[#E8EDE5] bg-[#FAFCF9] p-2">
+            <div className="max-h-[30dvh] shrink-0 overflow-y-auto border-b border-[#E8EDE5] bg-[#FAFCF9] p-2">
               {conversations.length === 0 ? (
                 <p className="px-3 py-4 text-center text-xs text-[#788579]">
                   No previous conversations.
@@ -315,7 +315,7 @@ export default function AssistPanel() {
             </div>
           )}
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#FAFCF9] p-3 sm:p-4">
+          <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#FAFCF9] p-3 sm:p-4">
             {historyLoading ? (
               <div className="flex h-full items-center justify-center text-sm text-[#748174]">
                 <LoaderCircle size={18} className="mr-2 animate-spin" />
@@ -378,7 +378,7 @@ export default function AssistPanel() {
 
           <form
             onSubmit={sendMessage}
-            className="border-t border-[#E5EBE2] bg-white p-3"
+            className="shrink-0 border-t border-[#E5EBE2] bg-white p-3"
           >
             <div className="flex items-end gap-2 rounded-xl border border-[#DCE5D9] bg-[#FAFCF9] p-2 focus-within:border-[#17472D] focus-within:ring-2 focus-within:ring-[#17472D]/10">
               <textarea
