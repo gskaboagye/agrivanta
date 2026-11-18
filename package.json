@@ -24,7 +24,7 @@
     "libphonenumber-js": "^1.13.15",
     "lucide-react": "^1.64.0",
     "mongodb": "^7.7.0",
-    "next": "16.4.3",
+    "next": "^16.4.6",
     "openai": "^7.45.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -38,7 +38,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"

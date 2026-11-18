@@ -105,7 +105,14 @@ export async function PATCH(request: NextRequest) {
 
     const existing = await administrators.findOne(
       { _id: new ObjectId(admin.id) },
-      { projection: { phone: 1, phoneVerified: 1 } }
+      {
+        projection: {
+          phone: 1,
+          phoneVerified: 1,
+          smsNotificationsEnabled: 1,
+          smsConsentAt: 1,
+        },
+      }
     );
 
     if (!existing) {
@@ -117,19 +124,38 @@ export async function PATCH(request: NextRequest) {
 
     const phoneChanged = existing.phone !== validation.data.phone;
 
+    const phoneVerified = !phoneChanged && existing.phoneVerified === true;
+    const smsNotificationsEnabled = phoneChanged
+      ? false
+      : validation.data.smsNotificationsEnabled;
+
+    const now = new Date();
+
+    const smsConsentAt = phoneChanged || !smsNotificationsEnabled
+      ? null
+      : existing.smsNotificationsEnabled === true
+        ? existing.smsConsentAt ?? now
+        : now;
+
     await administrators.updateOne(
       { _id: new ObjectId(admin.id) },
       {
         $set: {
           phone: validation.data.phone,
-          phoneVerified: phoneChanged
-            ? false
-            : existing.phoneVerified === true,
-          smsNotificationsEnabled: validation.data.smsNotificationsEnabled,
-          updatedAt: new Date(),
+          phoneVerified,
+          smsNotificationsEnabled,
+          smsConsentAt,
+          updatedAt: now,
         },
       }
     );
+
+    if (phoneChanged) {
+      await db.collection("adminPhoneVerifications").deleteOne({
+        adminId: admin.id,
+      });
+    }
+
 
     return NextResponse.json({
       success: true,
@@ -138,10 +164,8 @@ export async function PATCH(request: NextRequest) {
         : "Administrator notification preferences updated.",
       profile: {
         phone: validation.data.phone,
-        phoneVerified: phoneChanged
-          ? false
-          : existing.phoneVerified === true,
-        smsNotificationsEnabled: validation.data.smsNotificationsEnabled,
+        phoneVerified,
+        smsNotificationsEnabled,
       },
     });
   } catch (error) {

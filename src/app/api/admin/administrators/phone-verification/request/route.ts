@@ -1,0 +1,195 @@
+import { connection, NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getDatabase } from "@/lib/mongodb";
+import { sendSms } from "@/lib/sms";
+import {
+  ensureAdminPhoneVerificationIndexes,
+  generateAdminPhoneOtp,
+  hashAdminPhoneOtp,
+  ADMIN_PHONE_OTP_EXPIRY_MS,
+  ADMIN_PHONE_OTP_RESEND_COOLDOWN_MS,
+  type AdminPhoneVerificationDocument,
+} from "@/lib/admin-phone-verification";
+
+export async function POST(request: NextRequest) {
+  await connection();
+
+  try {
+    const origin = request.headers.get("origin");
+
+    if (!origin || origin !== request.nextUrl.origin) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request origin." },
+        { status: 403 }
+      );
+    }
+
+    const admin = await requireAdmin();
+
+    if (process.env.ARKESEL_SMS_ENABLED !== "true") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Phone verification is temporarily unavailable.",
+        },
+        { status: 503 }
+      );
+    }
+
+    const db = await getDatabase();
+
+    await ensureAdminPhoneVerificationIndexes();
+
+    const administrator = await db.collection("administrators").findOne(
+      {
+        _id: new ObjectId(admin.id),
+        status: "active",
+      },
+      {
+        projection: {
+          phone: 1,
+          phoneVerified: 1,
+        },
+      }
+    );
+
+    if (!administrator) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Active administrator account not found.",
+        },
+        { status: 404 }
+      );
+    }
+
+    const phone = String(administrator.phone ?? "").trim();
+
+    if (!/^\+233\d{9}$/.test(phone)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Add a valid Ghanaian phone number to your profile first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (administrator.phoneVerified === true) {
+      return NextResponse.json({
+        success: true,
+        message: "This phone number is already verified.",
+        alreadyVerified: true,
+      });
+    }
+
+    const collection =
+      db.collection<AdminPhoneVerificationDocument>(
+        "adminPhoneVerifications"
+      );
+
+    const now = new Date();
+    const cooldownCutoff = new Date(
+      now.getTime() - ADMIN_PHONE_OTP_RESEND_COOLDOWN_MS
+    );
+
+    const code = generateAdminPhoneOtp();
+    const codeHash = hashAdminPhoneOtp(admin.id, phone, code);
+
+    const verification: AdminPhoneVerificationDocument = {
+      adminId: admin.id,
+      phone,
+      codeHash,
+      attempts: 0,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + ADMIN_PHONE_OTP_EXPIRY_MS),
+    };
+
+    try {
+      await collection.findOneAndUpdate(
+        {
+          adminId: admin.id,
+          $or: [
+            { createdAt: { $lte: cooldownCutoff } },
+            { createdAt: { $exists: false } },
+          ],
+        },
+        { $set: verification },
+        {
+          upsert: true,
+          returnDocument: "after",
+          includeResultMetadata: false,
+        }
+      );
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === 11000
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Please wait one minute before requesting another code.",
+          },
+          { status: 429 }
+        );
+      }
+
+      throw error;
+    }
+
+    const result = await sendSms({
+      recipient: phone,
+      message: `Your AgriVanta administrator phone verification code is ${code}. It expires in 5 minutes. Do not share this code with anyone.`,
+    });
+
+    if (!result.success) {
+      console.error(
+        "Administrator phone verification SMS failed:",
+        result.message
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "We could not send your verification code. Please try again later.",
+        },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "A verification code has been sent to your phone.",
+      expiresInSeconds: ADMIN_PHONE_OTP_EXPIRY_MS / 1000,
+      resendAfterSeconds: ADMIN_PHONE_OTP_RESEND_COOLDOWN_MS / 1000,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "ADMIN_UNAUTHORIZED"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Administrator authentication required.",
+        },
+        { status: 401 }
+      );
+    }
+
+    console.error("Administrator phone verification request failed:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Unable to request phone verification right now.",
+      },
+      { status: 500 }
+    );
+  }
+}

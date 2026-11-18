@@ -33,6 +33,95 @@ export default function AdminProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [savedPhone, setSavedPhone] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [requestingCode, setRequestingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [resendAfter, setResendAfter] = useState(0);
+
+  const phoneHasChanged = profile.phone.trim() !== savedPhone;
+
+  useEffect(() => {
+    if (resendAfter <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setResendAfter((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [resendAfter]);
+
+  async function handleRequestVerification() {
+    setError("");
+    setSuccess("");
+    setRequestingCode(true);
+
+    try {
+      const response = await fetch(
+        "/api/admin/administrators/phone-verification/request",
+        { method: "POST" }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to send verification code.");
+      }
+
+      if (result.alreadyVerified) {
+        setProfile((current) => ({ ...current, phoneVerified: true }));
+        setSuccess(result.message);
+        return;
+      }
+
+      setCodeSent(true);
+      setVerificationCode("");
+      setResendAfter(result.resendAfterSeconds || 60);
+      setSuccess(result.message || "Verification code sent.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to send verification code."
+      );
+    } finally {
+      setRequestingCode(false);
+    }
+  }
+
+  async function handleVerifyPhone() {
+    setError("");
+    setSuccess("");
+    setVerifyingCode(true);
+
+    try {
+      const response = await fetch(
+        "/api/admin/administrators/phone-verification/verify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: verificationCode }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to verify phone number.");
+      }
+
+      setProfile((current) => ({ ...current, phoneVerified: true }));
+      setCodeSent(false);
+      setVerificationCode("");
+      setResendAfter(0);
+      setSuccess(result.message || "Phone number verified successfully.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to verify phone number."
+      );
+    } finally {
+      setVerifyingCode(false);
+    }
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -56,6 +145,7 @@ export default function AdminProfilePage() {
           smsNotificationsEnabled:
             result.profile.smsNotificationsEnabled === true,
         });
+        setSavedPhone(result.profile.phone || '');
       } catch (err) {
         setError(
           err instanceof Error
@@ -106,6 +196,10 @@ export default function AdminProfilePage() {
         smsNotificationsEnabled:
           result.profile.smsNotificationsEnabled === true,
       });
+      setSavedPhone(result.profile.phone || '');
+      setCodeSent(false);
+      setVerificationCode('');
+      setResendAfter(0);
 
       setSuccess(result.message || "Profile updated successfully.");
     } catch (err) {
@@ -246,6 +340,72 @@ export default function AdminProfilePage() {
               )}
             </div>
 
+            {!profile.phoneVerified && (
+              <div className="mt-4 space-y-3">
+                {phoneHasChanged ? (
+                  <p className="text-sm text-amber-700">
+                    Save your phone number before requesting verification.
+                  </p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleRequestVerification}
+                      disabled={
+                        requestingCode ||
+                        resendAfter > 0 ||
+                        !/^\+233\d{9}$/.test(profile.phone.trim())
+                      }
+                      className="rounded-xl bg-[#17472D] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#103820] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {requestingCode
+                        ? "Sending code..."
+                        : resendAfter > 0
+                          ? `Resend code in ${resendAfter}s`
+                          : codeSent
+                            ? "Resend verification code"
+                            : "Send verification code"}
+                    </button>
+
+                    {codeSent && (
+                      <div className="space-y-3 rounded-xl border border-[#e5e9e1] bg-[#fbfcfa] p-4">
+                        <label
+                          htmlFor="admin-phone-verification-code"
+                          className="block text-sm font-semibold text-[#354737]"
+                        >
+                          Enter the six-digit verification code
+                        </label>
+
+                        <input
+                          id="admin-phone-verification-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          value={verificationCode}
+                          onChange={(event) =>
+                            setVerificationCode(
+                              event.target.value.replace(/\D/g, "").slice(0, 6)
+                            )
+                          }
+                          placeholder="000000"
+                          className="w-full max-w-xs rounded-xl border border-[#dfe5dc] bg-white px-4 py-3 text-center text-lg font-semibold tracking-[0.4em] text-[#26372b] outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={handleVerifyPhone}
+                          disabled={verifyingCode || verificationCode.length !== 6}
+                          className="rounded-xl bg-[#17472D] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#103820] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {verifyingCode ? "Verifying..." : "Verify phone number"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             <p className="mt-3 text-xs leading-5 text-[#899487]">
               Use the international Ghana format, for example
               +233 followed by your nine-digit mobile number.
@@ -313,8 +473,8 @@ export default function AdminProfilePage() {
               <p className="text-xs leading-5 text-[#74816f]">
                 Email notifications remain separate from this setting.
                 Enabling SMS does not disable email notifications.
-                SMS delivery will also depend on the approval of
-                AgriVanta&apos;s registered sender ID.
+                SMS notifications are sent to your verified phone
+                number when you have enabled this preference.
               </p>
             </div>
           </section>

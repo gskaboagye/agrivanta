@@ -1,4 +1,4 @@
-﻿
+
 import { connection, NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { randomUUID } from "node:crypto";
@@ -275,16 +275,15 @@ async function notifyConversationParticipants(
           role: {
             $in: ["super_admin", "report_manager"],
           },
-          email: {
-            $type: "string",
-            $ne: "",
-          },
         },
         {
           projection: {
             _id: 0,
             name: 1,
             email: 1,
+            phone: 1,
+            phoneVerified: 1,
+            smsNotificationsEnabled: 1,
           },
         }
       )
@@ -318,6 +317,38 @@ async function notifyConversationParticipants(
             }
           } catch (error) {
             console.error("Administrator notification email error:", error);
+          }
+        })
+    );
+    // Send SMS only to administrators with verified phones and explicit consent.
+    await Promise.all(
+      administrators
+        .filter((administrator) => {
+          const phone = String(administrator.phone ?? "").trim();
+
+          return (
+            administrator.phoneVerified === true &&
+            administrator.smsNotificationsEnabled === true &&
+            /^\+233\d{9}$/.test(phone)
+          );
+        })
+        .map(async (administrator) => {
+          try {
+            const smsResult = await sendSms({
+              recipient: String(administrator.phone).trim(),
+              message:
+                `AgriVanta: A new message was posted to report ` +
+                `${report.referenceNumber}. Log in to your admin account to view it.`,
+            });
+
+            if (!smsResult.success) {
+              console.error(
+                "Administrator SMS notification failed:",
+                smsResult.message
+              );
+            }
+          } catch (error) {
+            console.error("Administrator SMS notification error:", error);
           }
         })
     );
