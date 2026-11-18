@@ -395,7 +395,7 @@ export default function AssistPanel() {
                 rows={1}
                 maxLength={10000}
                 disabled={loading}
-                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#263B2B] outline-none placeholder:text-[#98A397] disabled:opacity-60"
+                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base sm:text-sm text-[#263B2B] outline-none placeholder:text-[#98A397] disabled:opacity-60"
               />
 
               <button
