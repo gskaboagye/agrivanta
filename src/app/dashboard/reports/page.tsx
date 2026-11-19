@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -25,6 +26,17 @@ type AdminResponse = {
   responseId: string;
   message: string;
   adminName: string;
+  createdAt: string;
+};
+
+type ReportConversationMessage = {
+  messageId: string;
+  reportId: string;
+  senderType: "user" | "admin";
+  senderId: string;
+  senderName: string;
+  senderEmail?: string;
+  message: string;
   createdAt: string;
 };
 
@@ -137,6 +149,14 @@ export default function MyReportsPage() {
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
   const [searchingUsers, setSearchingUsers] = useState(false);
 
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [conversationMessages, setConversationMessages] = useState<ReportConversationMessage[]>([]);
+  const [conversationDraft, setConversationDraft] = useState("");
+  const [loadingConversation, setLoadingConversation] = useState(false);
+  const [sendingConversationMessage, setSendingConversationMessage] = useState(false);
+  const [conversationError, setConversationError] = useState("");
+  const [conversationNotice, setConversationNotice] = useState("");
+
   const loadReports = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -214,6 +234,101 @@ export default function MyReportsPage() {
       controller.abort();
     };
   }, [entityType, userSearch, selectedUser]);
+
+
+  async function loadConversation(reportId: string) {
+    setLoadingConversation(true);
+    setConversationError("");
+
+    try {
+      const response = await fetch(
+        `/api/user-reports/${encodeURIComponent(reportId)}/messages`,
+        {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to load this report conversation.");
+      }
+
+      setConversationMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (err) {
+      setConversationError(
+        err instanceof Error ? err.message : "Unable to load this report conversation."
+      );
+    } finally {
+      setLoadingConversation(false);
+    }
+  }
+
+  async function toggleConversation(reportId: string) {
+    setConversationError("");
+    setConversationNotice("");
+
+    if (expandedReportId === reportId) {
+      setExpandedReportId(null);
+      setConversationMessages([]);
+      setConversationDraft("");
+      return;
+    }
+
+    setExpandedReportId(reportId);
+    setConversationMessages([]);
+    setConversationDraft("");
+    await loadConversation(reportId);
+  }
+
+  async function sendConversationMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!expandedReportId) return;
+
+    const message = conversationDraft.trim();
+    if (!message) {
+      setConversationError("Enter a message before sending.");
+      return;
+    }
+    if (message.length > 3000) {
+      setConversationError("Your message cannot exceed 3,000 characters.");
+      return;
+    }
+
+    setSendingConversationMessage(true);
+    setConversationError("");
+    setConversationNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/user-reports/${encodeURIComponent(expandedReportId)}/messages`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to send your message.");
+      }
+
+      setConversationDraft("");
+      await loadConversation(expandedReportId);
+      setConversationNotice(
+        "Your message has been added. Email and SMS notifications are sent when the recipient's contact details and notification preferences allow."
+      );
+    } catch (err) {
+      setConversationError(
+        err instanceof Error ? err.message : "Unable to send your message."
+      );
+    } finally {
+      setSendingConversationMessage(false);
+    }
+  }
 
   const filteredReports = reports.filter((report) => {
     const query = search.trim().toLowerCase();
@@ -764,6 +879,128 @@ export default function MyReportsPage() {
                             No official response yet. Our team will review your report and respond here when an update is available.
                           </p>
                         )}
+                      </div>
+
+                      <div className="mt-5 border-t border-[#EDF0E9] pt-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-2">
+                            <MessageSquare size={17} className="text-[#17472D]" />
+                            <h4 className="text-sm font-bold text-[#193D2A]">Report conversation</h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void toggleConversation(report.reportId)}
+                            className="inline-flex items-center justify-center rounded-lg border border-[#D9DED4] bg-white px-3 py-2 text-xs font-bold text-[#17472D] transition hover:bg-[#F1F2E8]"
+                          >
+                            {expandedReportId === report.reportId ? "Close conversation" : "Open conversation"}
+                          </button>
+                        </div>
+
+                        {expandedReportId === report.reportId ? (
+                          <div className="mt-4 rounded-xl border border-[#E0E5D9] bg-[#FCFCF9] p-3 sm:p-4">
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <p className="text-xs leading-5 text-[#718071]">
+                                Send a message to the AgriVanta support team about this report.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void loadConversation(report.reportId)}
+                                disabled={loadingConversation}
+                                aria-label="Refresh conversation"
+                                className="shrink-0 rounded-lg border border-[#D9DED4] bg-white p-2 text-[#17472D] hover:bg-[#F1F2E8] disabled:opacity-50"
+                              >
+                                <RefreshCw size={15} className={loadingConversation ? "animate-spin" : ""} />
+                              </button>
+                            </div>
+
+                            {conversationError ? (
+                              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                                {conversationError}
+                              </div>
+                            ) : null}
+                            {conversationNotice ? (
+                              <div className="mb-3 rounded-lg border border-green-200 bg-green-50 p-3 text-xs leading-5 text-green-800">
+                                {conversationNotice}
+                              </div>
+                            ) : null}
+
+                            <div className="max-h-[28rem] min-h-32 space-y-3 overflow-y-auto rounded-lg bg-white p-3">
+                              {loadingConversation && conversationMessages.length === 0 ? (
+                                <div className="flex items-center justify-center gap-2 py-8 text-xs text-[#718071]">
+                                  <LoaderCircle size={16} className="animate-spin" />
+                                  Loading conversation...
+                                </div>
+                              ) : conversationMessages.length === 0 ? (
+                                <p className="py-8 text-center text-xs leading-5 text-[#879084]">
+                                  No messages yet. Send a message below to add information or ask for an update.
+                                </p>
+                              ) : (
+                                conversationMessages.map((message) => {
+                                  const isOwnMessage = message.senderType === "user";
+                                  return (
+                                    <div
+                                      key={message.messageId}
+                                      className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                                    >
+                                      <div
+                                        className={`max-w-[90%] rounded-2xl px-3 py-2.5 sm:max-w-[80%] ${
+                                          isOwnMessage
+                                            ? "rounded-br-sm bg-[#17472D] text-white"
+                                            : "rounded-bl-sm border border-[#E0E5D9] bg-[#F5F9F3] text-[#193D2A]"
+                                        }`}
+                                      >
+                                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                                          <span className="text-[11px] font-bold">
+                                            {isOwnMessage ? "You" : message.senderName || "AgriVanta Support"}
+                                          </span>
+                                          <span className={`text-[10px] ${isOwnMessage ? "text-white/70" : "text-[#879084]"}`}>
+                                            {formatDate(message.createdAt)}
+                                          </span>
+                                        </div>
+                                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
+                                          {message.message}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+
+                            <form onSubmit={sendConversationMessage} className="mt-3">
+                              <label
+                                htmlFor={`report-message-${report.reportId}`}
+                                className="mb-2 block text-xs font-bold text-[#536453]"
+                              >
+                                Your message
+                              </label>
+                              <textarea
+                                id={`report-message-${report.reportId}`}
+                                value={conversationDraft}
+                                onChange={(event) => setConversationDraft(event.target.value)}
+                                maxLength={3000}
+                                rows={3}
+                                placeholder="Write a message to the support team..."
+                                className="block w-full resize-y rounded-xl border border-[#D9DED4] bg-white px-3 py-3 text-sm leading-6 text-[#193D2A] outline-none focus:border-[#17472D] focus:ring-2 focus:ring-[#17472D]/10"
+                              />
+                              <div className="mt-2 flex flex-col-reverse items-start justify-between gap-3 sm:flex-row sm:items-center">
+                                <p className="text-[10px] text-[#879084]">{conversationDraft.length}/3000 characters</p>
+                                <button
+                                  type="submit"
+                                  disabled={sendingConversationMessage || !conversationDraft.trim() || loadingConversation}
+                                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#235B3A] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                                >
+                                  {sendingConversationMessage ? (
+                                    <LoaderCircle size={15} className="animate-spin" />
+                                  ) : (
+                                    <Send size={15} />
+                                  )}
+                                  {sendingConversationMessage ? "Sending..." : "Send message"}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        ) : null}
                       </div>
                     </article>
                   ))}

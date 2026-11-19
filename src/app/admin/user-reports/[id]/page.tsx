@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   MessageSquare,
   ClipboardList,
+  Send,
+  LoaderCircle,
 } from "lucide-react";
 
 type ReportStatus =
@@ -45,6 +47,17 @@ type AdminResponse = {
   createdAt: string;
 };
 
+
+type ReportConversationMessage = {
+  messageId: string;
+  reportId: string;
+  senderType: "user" | "admin";
+  senderId: string;
+  senderName: string;
+  senderEmail?: string;
+  message: string;
+  createdAt: string;
+};
 
 type Report = {
   reportId: string;
@@ -115,12 +128,14 @@ function AdminUserReportDetailsContent() {
   const [status, setStatus] = useState<ReportStatus>("pending");
   const [priority, setPriority] = useState("medium");
   const [adminNote, setAdminNote] = useState("");
-  const [adminResponse, setAdminResponse] = useState("");
+  const [messages, setMessages] = useState<ReportConversationMessage[]>([]);
+  const [messageText, setMessageText] = useState("");
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [resolution, setResolution] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [sendingResponse, setSendingResponse] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -169,6 +184,46 @@ function AdminUserReportDetailsContent() {
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
+
+  const loadMessages = useCallback(async () => {
+    setLoadingMessages(true);
+
+    try {
+      const response = await fetch(
+        `/api/user-reports/${encodeURIComponent(reportId)}/messages`,
+        {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        window.location.assign("/admin/login");
+        return;
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to load the report conversation.");
+      }
+
+      setMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load the report conversation."
+      );
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [reportId]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [loadMessages]);
 
   async function handleUpdate(
     event: React.FormEvent<HTMLFormElement>
@@ -261,37 +316,37 @@ function AdminUserReportDetailsContent() {
     }
   }
 
-  async function handleSendResponse(
+  async function handleSendMessage(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    if (!adminResponse.trim()) {
-      setError("Please enter a response before sending.");
+    const trimmedMessage = messageText.trim();
+
+    if (!trimmedMessage) {
+      setError("Please enter a message before sending.");
       return;
     }
 
-    if (adminResponse.trim().length > 3000) {
-      setError("The response cannot exceed 3,000 characters.");
+    if (trimmedMessage.length > 3000) {
+      setError("The message cannot exceed 3,000 characters.");
       return;
     }
 
-    setSendingResponse(true);
+    setSendingMessage(true);
     setError("");
     setSuccess("");
 
     try {
       const response = await fetch(
-        `/api/admin/user-reports/${encodeURIComponent(reportId)}`,
+        `/api/user-reports/${encodeURIComponent(reportId)}/messages`,
         {
-          method: "PATCH",
+          method: "POST",
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            adminResponse: adminResponse.trim(),
-          }),
+          body: JSON.stringify({ message: trimmedMessage }),
         }
       );
 
@@ -303,29 +358,22 @@ function AdminUserReportDetailsContent() {
       }
 
       if (!response.ok || !data.success) {
-        throw new Error(
-          data.message || "Unable to send the official response."
-        );
+        throw new Error(data.message || "Unable to send your message.");
       }
 
-      setReport((current) =>
-        current
-          ? {
-              ...data.report,
-            }
-          : data.report
+      setMessageText("");
+      await loadMessages();
+      setSuccess(
+        "Your message was added to the conversation. Notifications will be sent where the recipient is eligible."
       );
-
-      setAdminResponse("");
-      setSuccess("Official response sent successfully.");
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Something went wrong while sending the response."
+          : "Something went wrong while sending your message."
       );
     } finally {
-      setSendingResponse(false);
+      setSendingMessage(false);
     }
   }
 
@@ -576,88 +624,152 @@ function AdminUserReportDetailsContent() {
             </section>
 
             <section className="rounded-2xl border border-[#e5e9e1] bg-white p-5 sm:p-7">
-              <div className="flex items-center gap-2 border-b border-[#edf0ea] pb-4">
-                <MessageSquare size={18} className="text-[#17472D]" />
-                <div>
-                  <h2 className="text-base font-bold text-[#26372b]">
-                    Official responses to reporter
-                  </h2>
-                  <p className="mt-1 text-xs text-[#899487]">
-                    These messages are visible to the person who submitted the report.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                {report.adminResponses?.length ? (
-                  [...report.adminResponses].reverse().map((response) => (
-                    <div
-                      key={response.responseId}
-                      className="rounded-xl border border-[#e8ede5] bg-[#fbfcfa] p-4"
-                    >
-                      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                        <p className="text-xs font-bold text-[#17472D]">
-                          {response.adminName || "Administrator"}
-                        </p>
-                        <span className="text-[10px] text-[#899487]">
-                          {formatDate(response.createdAt)}
-                        </span>
-                      </div>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#52624f]">
-                        {response.message}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <div className="py-5 text-center">
-                    <MessageSquare
-                      size={25}
-                      className="mx-auto text-[#b5beb1]"
-                    />
-                    <p className="mt-3 text-xs text-[#899487]">
-                      No official responses have been sent yet.
+              <div className="flex items-center justify-between gap-3 border-b border-[#edf0ea] pb-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={18} className="text-[#17472D]" />
+                  <div>
+                    <h2 className="text-base font-bold text-[#26372b]">
+                      Report conversation
+                    </h2>
+                    <p className="mt-1 text-xs text-[#899487]">
+                      Messages are shared with the reporter and authorized administrators.
                     </p>
                   </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadMessages()}
+                  disabled={loadingMessages}
+                  aria-label="Refresh conversation"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#e5e9e1] text-[#52624f] transition hover:bg-[#f5f7f2] disabled:opacity-50"
+                >
+                  <RefreshCw size={15} className={loadingMessages ? "animate-spin" : ""} />
+                </button>
+              </div>
+
+              {report.adminResponses?.length ? (
+                <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3">
+                  <p className="text-xs font-bold text-amber-900">
+                    Previous official responses
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">
+                    These responses were sent before the shared conversation was connected. They remain visible here for historical reference.
+                  </p>
+                  <div className="mt-3 space-y-3">
+                    {[...report.adminResponses].reverse().map((oldResponse) => (
+                      <div
+                        key={oldResponse.responseId}
+                        className="rounded-lg border border-amber-100 bg-white p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-[#17472D]">
+                            {oldResponse.adminName || "Administrator"}
+                          </p>
+                          <span className="text-[10px] text-[#899487]">
+                            {formatDate(oldResponse.createdAt)}
+                          </span>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#52624f]">
+                          {oldResponse.message}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-5 max-h-[520px] space-y-3 overflow-y-auto rounded-xl bg-[#f8faf6] p-3 sm:p-4">
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#899487]">
+                    <LoaderCircle size={17} className="animate-spin" />
+                    Loading conversation...
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <MessageSquare size={27} className="mx-auto text-[#b5beb1]" />
+                    <p className="mt-3 text-sm font-semibold text-[#52624f]">
+                      No conversation messages yet
+                    </p>
+                    <p className="mt-1 text-xs text-[#899487]">
+                      Send a message to begin communicating with the reporter.
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((item) => {
+                    const isAdminMessage = item.senderType === "admin";
+
+                    return (
+                      <div
+                        key={item.messageId}
+                        className={`flex ${isAdminMessage ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[88%] rounded-2xl px-4 py-3 ${
+                            isAdminMessage
+                              ? "rounded-br-md bg-[#17472D] text-white"
+                              : "rounded-bl-md border border-[#e5e9e1] bg-white text-[#26372b]"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                            <p className={`text-[11px] font-bold ${
+                              isAdminMessage ? "text-white" : "text-[#17472D]"
+                            }`}>
+                              {isAdminMessage
+                                ? `${item.senderName || "Administrator"} (You)`
+                                : item.senderName || "Reporter"}
+                            </p>
+                            <span className={`text-[10px] ${
+                              isAdminMessage ? "text-white/70" : "text-[#899487]"
+                            }`}>
+                              {formatDate(item.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
+                            {item.message}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
 
-              <form
-                onSubmit={handleSendResponse}
-                className="mt-6 border-t border-[#edf0ea] pt-5"
-              >
+              <form onSubmit={handleSendMessage} className="mt-5 border-t border-[#edf0ea] pt-5">
                 <label
-                  htmlFor="admin-response"
+                  htmlFor="conversation-message"
                   className="mb-2 block text-xs font-semibold text-[#52624f]"
                 >
-                  Write an official response
+                  Reply to reporter
                 </label>
                 <textarea
-                  id="admin-response"
-                  value={adminResponse}
-                  onChange={(event) => setAdminResponse(event.target.value)}
-                  rows={5}
+                  id="conversation-message"
+                  value={messageText}
+                  onChange={(event) => setMessageText(event.target.value)}
+                  rows={4}
                   maxLength={3000}
-                  placeholder="Write a clear and professional response to the reporter..."
+                  placeholder="Write a clear and helpful message..."
                   className="w-full resize-y rounded-xl border border-[#dfe7dc] bg-[#fbfcfa] px-3 py-3 text-sm leading-6 text-[#52624f] outline-none placeholder:text-[#a0aa9b] focus:border-[#17472D]"
                 />
-                <p className="mt-1 text-right text-[10px] text-[#899487]">
-                  {adminResponse.length}/3000
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-[10px] text-[#899487]">
+                    {messageText.length}/3000 characters
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={sendingMessage || !messageText.trim()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17472D] px-5 py-3 text-xs font-bold text-white transition hover:bg-[#103a23] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {sendingMessage ? (
+                      <RefreshCw size={15} className="animate-spin" />
+                    ) : (
+                      <Send size={15} />
+                    )}
+                    {sendingMessage ? "Sending message..." : "Send message"}
+                  </button>
+                </div>
+                <p className="mt-3 text-[11px] leading-5 text-[#899487]">
+                  The reporter will receive email and, where SMS notifications are enabled and their phone is verified, an SMS notification.
                 </p>
-
-                <button
-                  type="submit"
-                  disabled={sendingResponse || !adminResponse.trim()}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#17472D] px-4 py-3 text-xs font-bold text-white transition hover:bg-[#103a23] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {sendingResponse ? (
-                    <RefreshCw size={15} className="animate-spin" />
-                  ) : (
-                    <MessageSquare size={15} />
-                  )}
-                  {sendingResponse
-                    ? "Sending response..."
-                    : "Send official response"}
-                </button>
               </form>
             </section>
           </div>
