@@ -351,9 +351,6 @@ function canAdminAccessMessages(
   );
 
 }
-
-
-
 async function notifyConversationParticipants(
   report: {
     reportId: string;
@@ -371,6 +368,27 @@ async function notifyConversationParticipants(
     const db = await getDatabase();
 
     if (adminSender) {
+      // In-app notification for the farmer.
+      const reporterUserId = report.reporter?.userId;
+
+      if (reporterUserId && ObjectId.isValid(reporterUserId)) {
+        try {
+          await db.collection("notifications").insertOne({
+            userId: reporterUserId,
+            type: "report_message",
+            title: "New reply to your report",
+            message: `${message.senderName} replied to report ${report.referenceNumber}.`,
+            reportId: report.reportId,
+            referenceNumber: report.referenceNumber,
+            read: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } catch (error) {
+          console.error("Farmer in-app notification error:", error);
+        }
+      }
+
       // Email notification to the reporter.
       const reporterEmail = report.reporter?.email;
 
@@ -399,7 +417,6 @@ async function notifyConversationParticipants(
       }
 
       // SMS notification requires a verified phone number and explicit consent.
-      const reporterUserId = report.reporter?.userId;
       const validReporterUserId = Boolean(
         reporterUserId && ObjectId.isValid(reporterUserId)
       );
@@ -497,7 +514,7 @@ async function notifyConversationParticipants(
         },
         {
           projection: {
-            _id: 0,
+            _id: 1,
             name: 1,
             email: 1,
             phone: 1,
@@ -508,7 +525,29 @@ async function notifyConversationParticipants(
       )
       .toArray();
 
-    console.info("[Report SMS] Administrator recipients found:", {
+    // In-app notifications for active Super Admins and Report Managers.
+    if (administrators.length > 0) {
+      try {
+        const now = new Date();
+
+        await db.collection("notifications").insertMany(
+          administrators.map((administrator) => ({
+            adminId: String(administrator._id),
+            type: "report_message",
+            title: "New message on a user report",
+            message: `${message.senderName} sent a message on report ${report.referenceNumber}.`,
+            reportId: report.reportId,
+            referenceNumber: report.referenceNumber,
+            read: false,
+            createdAt: now,
+            updatedAt: now,
+          }))
+        );
+      } catch (error) {
+        console.error("Administrator in-app notification error:", error);
+      }
+    }
+        console.info("[Report SMS] Administrator recipients found:", {
       count: administrators.length,
       recipients: administrators.map((administrator) => {
         const phone = String(administrator.phone ?? "").trim();
@@ -618,501 +657,252 @@ async function notifyConversationParticipants(
     console.error("Report conversation notification error:", error);
   }
 }
-
 export async function GET(
-
   _request: NextRequest,
-
   { params }: RouteContext
-
 ) {
-
   await connection();
 
-
-
   try {
-
     const { id } = await params;
 
-
-
     if (!id || id.length > 100) {
-
       return NextResponse.json(
-
         { success: false, message: "Invalid report reference." },
-
         { status: 400 }
-
       );
-
     }
-
-
 
     const admin = await getCurrentAdmin();
-
     const user = admin ? null : await getCurrentUser();
 
-
-
     if (!admin && !user) {
-
       return unauthorizedResponse();
-
     }
-
-
 
     if (admin && !canAdminAccessMessages(admin)) {
-
       return forbiddenResponse();
-
     }
-
-
 
     const db = await getDatabase();
 
-
-
     await ensureMessageIndexes(db);
 
-
-
     const reportFilter = admin
-
       ? { reportId: id }
-
       : {
-
           reportId: id,
-
           "reporter.userId": user!.id,
-
         };
 
-
-
     const report = await db.collection("userReports").findOne(
-
       reportFilter,
-
       {
-
         projection: {
-
           _id: 0,
-
           reportId: 1,
-
         },
-
       }
-
     );
-
-
 
     if (!report) {
-
       return NextResponse.json(
-
         { success: false, message: "Report not found." },
-
         { status: 404 }
-
       );
-
     }
-
-
 
     const messages = await db
-
-     .collection<MessageDocument>("reportMessages")
-
-     .find({ reportId: id })
-
-     .sort({ createdAt: -1 })
-
-     .limit(100)
-
-     .toArray();
-
-
+      .collection<MessageDocument>("reportMessages")
+      .find({ reportId: id })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray();
 
     return NextResponse.json({
-
       success: true,
-
       messages: messages.reverse(),
-
     });
-
   } catch (error) {
-
     console.error("Report messages retrieval error:", error);
 
-
-
     return NextResponse.json(
-
       {
-
         success: false,
-
         message: "Unable to retrieve this conversation.",
-
       },
-
       { status: 500 }
-
     );
-
   }
-
 }
 
-
-
 export async function POST(
-
   request: NextRequest,
-
   { params }: RouteContext
-
 ) {
-
   await connection();
 
-
-
   try {
-
     const originError = invalidOriginResponse(request);
 
-
-
     if (originError) {
-
       return originError;
-
     }
-
-
 
     const { id } = await params;
 
-
-
     if (!id || id.length > 100) {
-
       return NextResponse.json(
-
         { success: false, message: "Invalid report reference." },
-
         { status: 400 }
-
       );
-
     }
-
-
 
     const admin = await getCurrentAdmin();
-
     const user = admin ? null : await getCurrentUser();
 
-
-
     if (!admin && !user) {
-
       return unauthorizedResponse();
-
     }
-
-
 
     if (admin && !canAdminAccessMessages(admin)) {
-
       return forbiddenResponse();
-
     }
-
-
 
     let body: unknown;
 
-
-
     try {
-
       body = await request.json();
-
     } catch {
-
       return NextResponse.json(
-
         {
-
           success: false,
-
           message: "Invalid JSON request body.",
-
         },
-
         { status: 400 }
-
       );
-
     }
-
-
 
     const validation = messageSchema.safeParse(body);
 
-
-
     if (!validation.success) {
-
       return NextResponse.json(
-
         {
-
           success: false,
-
           message:
-
             "Enter a message between 1 and 3,000 characters.",
-
           errors: validation.error.flatten(),
-
         },
-
         { status: 400 }
-
       );
-
     }
-
-
 
     const db = await getDatabase();
 
-
-
     await ensureMessageIndexes(db);
 
-
-
     const reportFilter = admin
-
       ? { reportId: id }
-
       : {
-
           reportId: id,
-
           "reporter.userId": user!.id,
-
         };
 
-
-
     const report = await db.collection("userReports").findOne(
-
       reportFilter,
-
       {
-
         projection: {
-
           _id: 0,
-
           reportId: 1,
-
           referenceNumber: 1,
-
           reporter: 1,
-
         },
-
       }
-
     );
 
-
-
     if (!report) {
-
       return NextResponse.json(
-
         { success: false, message: "Report not found." },
-
         { status: 404 }
-
       );
-
     }
-
-
 
     const now = new Date();
 
-
-
     const senderType = admin ? "admin" : "user";
-
     const senderId = admin ? admin.id : user!.id;
 
-
-
     const withinLimit = await consumeMessageRateLimit(
-
       db,
-
       senderType,
-
       senderId,
-
       now
-
     );
-
-
 
     if (!withinLimit) {
-
       return NextResponse.json(
-
         {
-
           success: false,
-
           message:
-
             "You have sent too many messages. Please try again after 15 minutes.",
-
         },
-
         { status: 429 }
-
       );
-
     }
 
-
-
     const newMessage: MessageDocument = {
-
       messageId: randomUUID(),
-
       reportId: id,
-
       senderType,
-
       senderId,
-
       senderName: admin ? admin.name : user!.name,
-
       senderEmail: admin ? admin.email : user!.email,
-
       message: validation.data.message,
-
       createdAt: now,
-
     };
 
-
-
     await db
-
-     .collection<MessageDocument>("reportMessages")
-
-     .insertOne(newMessage);
-
-
+      .collection<MessageDocument>("reportMessages")
+      .insertOne(newMessage);
 
     await db.collection("userReports").updateOne(
-
       { reportId: id },
-
       {
-
         $set: {
-
           updatedAt: now,
-
         },
-
       }
-
     );
 
-
-
-    // Email notifications are best-effort.
-
-    // Message storage does not depend on email delivery.
-
+    // Notifications are best-effort.
+    // Message storage does not depend on notification delivery.
     await notifyConversationParticipants(
-
       {
-
         reportId: report.reportId,
-
         referenceNumber: report.referenceNumber,
-
         reporter: report.reporter,
-
       },
-
       newMessage,
-
       Boolean(admin)
-
     );
-
-
 
     return NextResponse.json(
-
       {
-
         success: true,
-
         message: "Message sent successfully.",
-
         newMessage,
-
       },
-
       { status: 201 }
-
     );
-
   } catch (error) {
-
     console.error("Report message sending error:", error);
 
-
-
     return NextResponse.json(
-
       {
-
         success: false,
-
         message: "Unable to send your message. Please try again.",
-
       },
-
       { status: 500 }
-
     );
-
   }
-
 }
