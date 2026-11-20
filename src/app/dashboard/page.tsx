@@ -107,7 +107,7 @@ function BuyerDashboard({
             </Link>
 
             <Link
-              href="/dashboard/inquiries"
+              href="/dashboard/inquiries?view=sent"
               className="inline-flex items-center gap-2 rounded-lg border border-white/35 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
               <ClipboardList size={16} /> My inquiries
@@ -158,7 +158,7 @@ function BuyerDashboard({
             </div>
 
             <Link
-              href="/dashboard/inquiries"
+              href="/dashboard/inquiries?view=sent"
               className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#17472D] hover:text-[#9B741F]"
             >
               View inquiries <ArrowRight size={15} />
@@ -169,11 +169,13 @@ function BuyerDashboard({
         <div className="mt-10 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#9B741F]">
-              Your account
+              Discover products and services
             </p>
-            <h2 className="mt-2 text-2xl font-extrabold">Your listings</h2>
+            <h2 className="mt-2 text-2xl font-extrabold">
+              Recently added to the marketplace
+            </h2>
             <p className="mt-1 text-sm text-[#718071]">
-              Manage the agricultural listings you've published.
+              Explore products, equipment, services, and opportunities from sellers.
             </p>
           </div>
 
@@ -181,7 +183,7 @@ function BuyerDashboard({
             href="/products"
             className="inline-flex items-center gap-2 text-sm font-bold text-[#17472D] hover:text-[#9B741F]"
           >
-            View marketplace <ArrowRight size={16} />
+            Explore marketplace <ArrowRight size={16} />
           </Link>
         </div>
 
@@ -219,13 +221,6 @@ function BuyerDashboard({
                   <p className="mt-4 text-lg font-extrabold text-[#17472D]">
                     {listing.price}
                   </p>
-
-                  <Link
-                    href="/dashboard/my-listings"
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#17472D] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#235B3A]"
-                  >
-                    Manage your listing <ArrowRight size={16} />
-                  </Link>
                 </div>
               </article>
             ))}
@@ -234,23 +229,23 @@ function BuyerDashboard({
           <div className="mt-5 rounded-2xl border border-dashed border-[#CCD8C7] bg-white px-6 py-12 text-center">
             <ShoppingBag size={28} className="mx-auto text-[#718071]" />
             <h3 className="mt-3 font-bold">
-              You haven't published any listings yet.
+              No marketplace listings are available right now.
             </h3>
             <p className="mt-1 text-sm text-[#718071]">
-              Create your first listing to start reaching buyers.
+              Visit the marketplace again later to discover new products and services.
             </p>
             <Link
-              href="/dashboard/create-listing"
+              href="/products"
               className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#17472D] px-5 py-3 text-sm font-bold text-white hover:bg-[#235B3A]"
             >
-              Create a listing <ArrowRight size={16} />
+              Browse marketplace <ArrowRight size={16} />
             </Link>
           </div>
         )}
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <Link
-            href="/dashboard/inquiries"
+            href="/dashboard/inquiries?view=sent"
             className="group rounded-2xl border border-[#E0E5D9] bg-white p-5 transition hover:border-[#B7C9B1] hover:shadow-sm"
           >
             <div className="flex items-start gap-4">
@@ -360,10 +355,17 @@ export default async function DashboardPage() {
       sentInquiries = await db.collection("inquiries").countDocuments({
         buyerId: String(user.id),
       });
-    }
 
-    // Only retrieve listings owned by this user.
-    if (ownerConditions.length > 0) {
+      // Buyers see the newest active marketplace listings, not seller-owned listings.
+      const documents = await listings
+        .find({ status: "active" })
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .toArray();
+
+      recentListings = documents.map(toListingPreview);
+    } else if (ownerConditions.length > 0) {
+      // Other roles continue to see listings owned by the logged-in user.
       const ownListingsFilter = {
         status: "active",
         $or: ownerConditions,

@@ -21,6 +21,7 @@ import {
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import AdminLogoutButton from "@/components/admin/admin-logout-button";
 import AdminAnalytics from "@/components/admin/admin-analytics";
+import AdminNotificationBell from "@/components/admin/admin-notification-bell";
 
 const managementSections = [
   {
@@ -111,6 +112,8 @@ async function AdminDashboardContent() {
           </Link>
 
           <div className="flex items-center gap-3">
+            <AdminNotificationBell />
+
             <div className="hidden text-right sm:block">
               <p className="text-sm font-bold text-[#354737]">
                 {admin.name}

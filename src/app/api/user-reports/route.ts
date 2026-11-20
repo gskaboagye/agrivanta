@@ -1,3 +1,4 @@
+
 import { randomUUID } from "node:crypto";
 import { connection, NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
@@ -46,7 +47,12 @@ let rateLimitIndexPromise: Promise<string> | null = null;
 
 async function checkRateLimit(userId: string) {
   const db = await getDatabase();
-  const collection = db.collection<{ _id: string; userId: string; expiresAt: Date; count: number }>("userReportRateLimits");
+  const collection = db.collection<{
+    _id: string;
+    userId: string;
+    expiresAt: Date;
+    count: number;
+  }>("userReportRateLimits");
 
   rateLimitIndexPromise ??= collection.createIndex(
     { expiresAt: 1 },
@@ -75,7 +81,10 @@ async function checkRateLimit(userId: string) {
 
   return {
     allowed: count <= RATE_LIMIT,
-    retryAfter: Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)),
+    retryAfter: Math.max(
+      1,
+      Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)
+    ),
   };
 }
 
@@ -252,6 +261,65 @@ export async function POST(request: NextRequest) {
 
     await db.collection("userReports").insertOne(report);
 
+    // Notify active Super Admins and Report Managers about the new report.
+    try {
+      const administrators = await db
+        .collection("administrators")
+        .find(
+          {
+            status: "active",
+            role: {
+              $in: ["super_admin", "report_manager"],
+            },
+          },
+          {
+            projection: {
+              _id: 1,
+            },
+          }
+        )
+        .toArray();
+
+      if (administrators.length > 0) {
+        const notificationTime = new Date();
+
+        const notificationResult = await db
+          .collection("notifications")
+          .insertMany(
+            administrators.map((administrator) => ({
+              adminId: String(administrator._id),
+              type: "new_user_report",
+              title: "New user report submitted",
+              message: `${user.name} submitted a new report: ${referenceNumber}.`,
+              reportId,
+              referenceNumber,
+              read: false,
+              createdAt: notificationTime,
+              updatedAt: notificationTime,
+            }))
+          );
+
+        console.info(
+          "[User report notification] Administrator notifications created.",
+          {
+            reportId,
+            referenceNumber,
+            recipientCount: notificationResult.insertedCount,
+          }
+        );
+      } else {
+        console.warn(
+          "[User report notification] No active Super Admins or Report Managers found."
+        );
+      }
+    } catch (notificationError) {
+      // Notification failure must not undo a successfully submitted report.
+      console.error(
+        "[User report notification] Failed to notify administrators:",
+        notificationError
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -269,7 +337,10 @@ export async function POST(request: NextRequest) {
     console.error("User report submission error:", error);
 
     return NextResponse.json(
-      { success: false, message: "An unexpected error occurred while submitting your report." },
+      {
+        success: false,
+        message: "An unexpected error occurred while submitting your report.",
+      },
       { status: 500 }
     );
   }
@@ -288,7 +359,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const pageParam = Number(request.nextUrl.searchParams.get("page") ?? "1");
+    const pageParam = Number(
+      request.nextUrl.searchParams.get("page") ?? "1"
+    );
+
     const page = Number.isFinite(pageParam)
       ? Math.max(1, Math.floor(pageParam))
       : 1;
@@ -339,7 +413,10 @@ export async function GET(request: NextRequest) {
     console.error("User reports retrieval error:", error);
 
     return NextResponse.json(
-      { success: false, message: "An unexpected error occurred while retrieving your reports." },
+      {
+        success: false,
+        message: "An unexpected error occurred while retrieving your reports.",
+      },
       { status: 500 }
     );
   }
