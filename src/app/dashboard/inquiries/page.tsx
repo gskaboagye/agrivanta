@@ -14,6 +14,8 @@ import {
   Phone,
   Smartphone,
   Mail,
+  Clock3,
+  CheckCircle2,
 } from "lucide-react";
 
 type Inquiry = {
@@ -33,13 +35,15 @@ type Inquiry = {
   buyerWhatsappEnabled?: boolean;
   message: string;
   status: "new" | "read" | "responded";
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date | null;
+  updatedAt: string | Date | null;
 };
 
 type InquiryView = "received" | "sent";
 
-function formatDate(value: string) {
+function formatDate(value: string | Date | null) {
+  if (!value) return "Date unavailable";
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -72,10 +76,7 @@ function normalizePhone(value?: string): string {
   return digits;
 }
 
-function getContactLinks(
-  phone?: string,
-  listingTitle?: string
-) {
+function getContactLinks(phone?: string, listingTitle?: string) {
   const normalized = normalizePhone(phone);
 
   if (!normalized) return null;
@@ -91,6 +92,30 @@ function getContactLinks(
     sms: `sms:+${normalized}?body=${encodedMessage}`,
     whatsapp: `https://wa.me/${normalized}?text=${encodedMessage}`,
   };
+}
+
+function getStatusLabel(status: Inquiry["status"], isBuyer: boolean) {
+  if (isBuyer) {
+    return status === "responded"
+      ? "Seller responded"
+      : "Awaiting response";
+  }
+
+  if (status === "new") return "New";
+  if (status === "read") return "Read";
+  return "Responded";
+}
+
+function getStatusClasses(status: Inquiry["status"]) {
+  if (status === "new") {
+    return "bg-[#FBF1D9] text-[#805B17]";
+  }
+
+  if (status === "responded") {
+    return "bg-[#EAF0E6] text-[#24542E]";
+  }
+
+  return "bg-[#EEF0EC] text-[#5D6B5E]";
 }
 
 export default function InquiriesPage() {
@@ -135,14 +160,11 @@ export default function InquiriesPage() {
       setNotice("");
 
       try {
-        const response = await fetch(
-          `/api/inquiries?view=${view}`,
-          {
-            method: "GET",
-            credentials: "include",
-            cache: "no-store",
-          }
-        );
+        const response = await fetch(`/api/inquiries?view=${view}`, {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
 
         if (response.status === 401) {
           window.location.href = "/login";
@@ -226,13 +248,27 @@ export default function InquiriesPage() {
     }
   }
 
+  const isBuyerView = view === "sent";
+
   const newCount = inquiries.filter(
     (inquiry) => inquiry.status === "new"
+  ).length;
+
+  const readCount = inquiries.filter(
+    (inquiry) => inquiry.status === "read"
   ).length;
 
   const respondedCount = inquiries.filter(
     (inquiry) => inquiry.status === "responded"
   ).length;
+
+  const awaitingResponseCount = newCount + readCount;
+
+  const pageTitle = isBuyerView ? "My Inquiries" : "Received Inquiries";
+
+  const pageDescription = isBuyerView
+    ? "Track the inquiries you have sent to sellers, follow their responses, and continue your conversations."
+    : "Manage inquiries from buyers interested in your agricultural products, equipment, and services.";
 
   return (
     <main className="min-h-full min-w-0 bg-[#F8F6EE] px-3 py-5 text-[#203B2A] sm:px-6 sm:py-8 lg:px-10">
@@ -252,12 +288,11 @@ export default function InquiriesPage() {
             </p>
 
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Inquiries
+              {pageTitle}
             </h1>
 
             <p className="mt-2 max-w-xl text-sm leading-6 text-[#68776A]">
-              Manage conversations about your agricultural products,
-              equipment, and services.
+              {pageDescription}
             </p>
           </div>
 
@@ -275,6 +310,7 @@ export default function InquiriesPage() {
           </button>
         </header>
 
+        {/* Inquiry summary */}
         <section className="mb-5 grid min-w-0 grid-cols-1 gap-3 sm:mb-6 sm:grid-cols-3 sm:gap-4">
           <div className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-4 sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
@@ -282,9 +318,7 @@ export default function InquiriesPage() {
             </div>
 
             <p className="text-sm text-[#6B7A6C]">
-              {view === "received"
-                ? "Received inquiries"
-                : "Sent inquiries"}
+              {isBuyerView ? "Total sent" : "Received inquiries"}
             </p>
 
             <p className="mt-1 text-3xl font-bold">
@@ -294,22 +328,36 @@ export default function InquiriesPage() {
 
           <div className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-4 sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#FBF1D9] text-[#916B1F]">
-              <MessageCircle size={20} />
+              {isBuyerView ? <Clock3 size={20} /> : <MessageCircle size={20} />}
             </div>
 
-            <p className="text-sm text-[#6B7A6C]">New inquiries</p>
+            <p className="text-sm text-[#6B7A6C]">
+              {isBuyerView ? "Awaiting response" : "New inquiries"}
+            </p>
 
             <p className="mt-1 text-3xl font-bold">
-              {loading ? "—" : newCount}
+              {loading
+                ? "—"
+                : isBuyerView
+                  ? awaitingResponseCount
+                  : newCount}
             </p>
+
+            {isBuyerView && !loading && (
+              <p className="mt-1 text-xs text-[#879084]">
+                New and read inquiries
+              </p>
+            )}
           </div>
 
           <div className="min-w-0 rounded-2xl border border-[#E0E5D9] bg-white p-4 sm:p-5">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF0E6] text-[#17472D]">
-              <Send size={20} />
+              {isBuyerView ? <CheckCircle2 size={20} /> : <Send size={20} />}
             </div>
 
-            <p className="text-sm text-[#6B7A6C]">Responded</p>
+            <p className="text-sm text-[#6B7A6C]">
+              {isBuyerView ? "Seller responded" : "Responded"}
+            </p>
 
             <p className="mt-1 text-3xl font-bold">
               {loading ? "—" : respondedCount}
@@ -317,6 +365,7 @@ export default function InquiriesPage() {
           </div>
         </section>
 
+        {/* View selector */}
         <div className="mb-6 flex flex-wrap gap-2 rounded-xl border border-[#E0E5D9] bg-white p-1.5">
           <button
             type="button"
@@ -363,6 +412,7 @@ export default function InquiriesPage() {
           </div>
         )}
 
+        {/* Inquiry list */}
         {loading ? (
           <div className="flex min-h-56 items-center justify-center rounded-2xl border border-[#E0E5D9] bg-white">
             <div className="flex items-center gap-3 text-sm text-[#68776A]">
@@ -377,13 +427,15 @@ export default function InquiriesPage() {
             </div>
 
             <h2 className="text-lg font-bold">
-              No {view} inquiries yet
+              {isBuyerView
+                ? "You haven't sent any inquiries yet"
+                : "No received inquiries yet"}
             </h2>
 
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#68776A]">
-              {view === "received"
-                ? "When someone contacts you about a listing, their inquiry will appear here."
-                : "When you contact a seller from the marketplace, your inquiry will appear here."}
+              {isBuyerView
+                ? "When you contact a seller about a marketplace listing, your inquiry will appear here. You can then track the seller's response and continue the conversation."
+                : "When someone contacts you about a listing, their inquiry will appear here."}
             </p>
 
             <Link
@@ -397,6 +449,7 @@ export default function InquiriesPage() {
           <div className="space-y-4">
             {inquiries.map((inquiry) => {
               const isReceived = view === "received";
+              const isUpdating = updatingId === inquiry.id;
 
               const personName = isReceived
                 ? inquiry.buyerName
@@ -419,8 +472,6 @@ export default function InquiriesPage() {
                 inquiry.listingTitle
               );
 
-              const isUpdating = updatingId === inquiry.id;
-
               return (
                 <article
                   key={inquiry.id}
@@ -430,15 +481,11 @@ export default function InquiriesPage() {
                     <div className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${
-                            inquiry.status === "new"
-                              ? "bg-[#FBF1D9] text-[#805B17]"
-                              : inquiry.status === "responded"
-                                ? "bg-[#EAF0E6] text-[#24542E]"
-                                : "bg-[#EEF0EC] text-[#5D6B5E]"
-                          }`}
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(
+                            inquiry.status
+                          )}`}
                         >
-                          {inquiry.status}
+                          {getStatusLabel(inquiry.status, !isReceived)}
                         </span>
 
                         <span className="text-xs text-[#7A887B]">
@@ -475,6 +522,42 @@ export default function InquiriesPage() {
                       {inquiry.message}
                     </p>
                   </div>
+
+                  {isBuyerView && (
+                    <div className="mt-4 rounded-xl border border-[#E0E5D9] bg-[#FAFBF8] p-4">
+                      {inquiry.status === "responded" ? (
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2
+                            size={19}
+                            className="mt-0.5 shrink-0 text-[#24542E]"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-[#24542E]">
+                              The seller has marked this inquiry as responded to.
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-[#68776A]">
+                              Open the conversation to read the messages and continue discussing the listing.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-3">
+                          <Clock3
+                            size={19}
+                            className="mt-0.5 shrink-0 text-[#916B1F]"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-[#805B17]">
+                              Awaiting the seller's response
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-[#68776A]">
+                              Your inquiry has been sent. You can continue the conversation here while waiting for the seller.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mt-5 flex flex-wrap gap-3">
                     <Link
