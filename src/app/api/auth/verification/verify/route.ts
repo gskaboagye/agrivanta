@@ -1,5 +1,7 @@
 import { connection, NextRequest, NextResponse } from "next/server";
+import { consumeRateLimit, getRequestClientAddress } from "@/lib/rate-limit";
 import { getDatabase, getMongoClient } from "@/lib/mongodb";
+import { isAccountDisabled } from "@/lib/auth";
 import {
   AUTH_OTP_CHANNELS,
   AUTH_OTP_MAX_ATTEMPTS,
@@ -27,6 +29,20 @@ export async function POST(request: NextRequest) {
   await connection();
 
   try {
+    const requestLimit = await consumeRateLimit({
+      scope: "verification-verify-ip",
+      identifier: getRequestClientAddress(request),
+      limit: 15,
+      windowMs: 900000,
+    });
+    if (!requestLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(requestLimit.retryAfterSeconds) } }
+      );
+    }
+
+
     if (invalidOrigin(request)) {
       return NextResponse.json(
         { success: false, message: "Invalid request origin." },
@@ -101,7 +117,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user.status === "disabled") {
+    if (isAccountDisabled(user)) {
       return NextResponse.json(
         {
           success: false,
@@ -307,6 +323,7 @@ export async function POST(request: NextRequest) {
               _id: user._id,
               accountVerified: true,
               status: { $ne: "disabled" },
+              disabled: { $ne: true },
             },
             { session }
           );

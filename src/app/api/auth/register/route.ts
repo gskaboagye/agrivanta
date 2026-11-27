@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { consumeRateLimit, getRequestClientAddress } from "@/lib/rate-limit";
 import { MongoServerError } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 import {
@@ -14,6 +15,20 @@ import {
 
 export async function POST(request: Request) {
   try {
+    const requestLimit = await consumeRateLimit({
+      scope: "registration-ip",
+      identifier: getRequestClientAddress(request),
+      limit: 5,
+      windowMs: 3600000,
+    });
+    if (!requestLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(requestLimit.retryAfterSeconds) } }
+      );
+    }
+
+
     let body: unknown;
 
     try {

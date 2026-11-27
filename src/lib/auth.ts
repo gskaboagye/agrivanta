@@ -16,6 +16,10 @@ export const ACCOUNT_ROLES = [
 
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
+export function isAccountDisabled(user: { status?: unknown; disabled?: unknown } | null | undefined): boolean {
+  return user?.status === "disabled" || user?.disabled === true;
+}
+
 export type AuthUser = {
   id: string;
   name: string;
@@ -210,6 +214,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           phone: 1,
           role: 1,
           status: 1,
+          disabled: 1,
           sessionVersion: 1,
         },
       }
@@ -223,7 +228,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    if (user.status === "disabled") {
+    if (isAccountDisabled(user)) {
       return null;
     }
 

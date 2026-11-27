@@ -1,7 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 import { getDatabase } from "@/lib/mongodb";
 
 type UserDocument = {
@@ -28,6 +28,17 @@ function unauthorizedResponse() {
       message: "Administrator authentication required.",
     },
     { status: 401 }
+  );
+}
+
+function isAdminForbidden(error: unknown) {
+  return error instanceof Error && error.message === "ADMIN_FORBIDDEN";
+}
+
+function forbiddenResponse() {
+  return NextResponse.json(
+    { success: false, message: "You do not have permission to perform this action." },
+    { status: 403 }
   );
 }
 
@@ -59,7 +70,7 @@ export async function GET(
   { params }: RouteContext
 ) {
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_users");
 
     const { id } = await params;
 
@@ -94,6 +105,9 @@ export async function GET(
     if (isAdminUnauthorized(error)) {
       return unauthorizedResponse();
     }
+    if (isAdminForbidden(error)) {
+      return forbiddenResponse();
+    }
 
     console.error("Admin user profile retrieval failed:", error);
 
@@ -113,7 +127,7 @@ export async function PATCH(
   { params }: RouteContext
 ) {
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_users");
 
     const { id } = await params;
 
@@ -167,8 +181,10 @@ export async function PATCH(
         {
           $set: {
             status,
+            disabled: status === "disabled",
             updatedAt: new Date(),
           },
+          ...(status === "disabled" ? { $inc: { sessionVersion: 1 } } : {}),
         },
         {
           returnDocument: "after",
@@ -194,6 +210,9 @@ export async function PATCH(
   } catch (error) {
     if (isAdminUnauthorized(error)) {
       return unauthorizedResponse();
+    }
+    if (isAdminForbidden(error)) {
+      return forbiddenResponse();
     }
 
     console.error("Admin user status update failed:", error);

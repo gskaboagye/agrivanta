@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 import {
   getPlatformSettings,
 } from "@/lib/platform-settings";
@@ -27,7 +27,7 @@ function verifySameOrigin(request: NextRequest) {
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_platform_settings");
 
     const settings = await getPlatformSettings();
 
@@ -36,6 +36,13 @@ export async function GET() {
       settings,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
@@ -57,7 +64,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminPermission("manage_platform_settings");
 
     if (!verifySameOrigin(request)) {
       return NextResponse.json(
@@ -204,6 +211,13 @@ export async function PUT(request: NextRequest) {
       settings: await getPlatformSettings(),
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 
 const NEWS_CATEGORIES = [
   "Crop Production",
@@ -74,7 +74,7 @@ export async function PUT(
   context: RouteContext
 ) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminPermission("manage_news");
 
     const origin = request.headers.get("origin");
 
@@ -233,6 +233,13 @@ export async function PUT(
       article: updatedArticle,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
@@ -257,7 +264,7 @@ export async function PATCH(
   context: RouteContext
 ) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminPermission("manage_news");
 
     const origin = request.headers.get("origin");
 
@@ -354,6 +361,13 @@ export async function PATCH(
       publication: historyEntry,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
@@ -378,7 +392,7 @@ export async function DELETE(
   context: RouteContext
 ) {
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_news");
 
     const origin = request.headers.get("origin");
 
@@ -415,6 +429,13 @@ export async function DELETE(
       message: "Article deleted successfully.",
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 
 const SOURCE_TYPES = ["rss", "api", "website"] as const;
 
@@ -67,7 +67,7 @@ function validateSourceUrl(value: unknown) {
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_news");
 
     const db = await getDatabase();
     const collection = db.collection("newsSources");
@@ -105,6 +105,13 @@ export async function GET() {
       })),
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
@@ -126,7 +133,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminPermission("manage_news");
 
     const origin = request.headers.get("origin");
 
@@ -284,6 +291,13 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
