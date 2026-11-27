@@ -181,7 +181,10 @@ export async function PATCH(
         {
           $set: {
             status,
+            disabled: status === "disabled",
             updatedAt: new Date(),
+          },
+          ...(status === "disabled" ? { $inc: { sessionVersion: 1 } } : {}),
           },
         },
         {
