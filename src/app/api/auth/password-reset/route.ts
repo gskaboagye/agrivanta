@@ -13,8 +13,7 @@ import {
 export async function POST(request: NextRequest) {
   await connection();
 
-  try {
-    const requestLimit = await consumeRateLimit({
+  const requestLimit = await consumeRateLimit({
       scope: "password-reset-ip",
       identifier: getRequestClientAddress(request),
       limit: 8,
