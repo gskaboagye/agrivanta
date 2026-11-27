@@ -1,5 +1,6 @@
 ﻿import { connection, NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
+import { consumeRateLimit, getRequestClientAddress } from "@/lib/rate-limit";
 import { isAccountDisabled } from "@/lib/auth";
 import { sendAuthVerificationEmail } from "@/lib/email";
 import { sendSms } from "@/lib/sms";
@@ -25,6 +26,20 @@ export async function POST(request: NextRequest) {
   await connection();
 
   try {
+    const requestLimit = await consumeRateLimit({
+      scope: "verification-request-ip",
+      identifier: getRequestClientAddress(request),
+      limit: 10,
+      windowMs: 900000,
+    });
+    if (!requestLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(requestLimit.retryAfterSeconds) } }
+      );
+    }
+
+
     if (invalidOrigin(request)) {
       return NextResponse.json(
         { success: false, message: "Invalid request origin." },
