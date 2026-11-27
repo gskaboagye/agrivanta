@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 
 function isSameOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -20,7 +20,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminPermission("manage_news");
 
     if (!isSameOrigin(request)) {
       return NextResponse.json(
@@ -86,7 +86,7 @@ export async function PATCH(
     const message =
       error instanceof Error ? error.message : "Unable to update news source.";
 
-    const status = message === "ADMIN_UNAUTHORIZED" ? 401 : 500;
+    const status = message === "ADMIN_UNAUTHORIZED" ? 401 : message === "ADMIN_FORBIDDEN" ? 403 : 500;
 
     return NextResponse.json(
       { success: false, message: status === 401 ? "Unauthorized." : message },
