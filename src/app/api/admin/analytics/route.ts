@@ -1,5 +1,5 @@
 import { connection, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 import { getDatabase } from "@/lib/mongodb";
 
 const ROLES = [
@@ -30,7 +30,7 @@ function getGhanaDateStart(date: Date) {
 export async function GET() {
   await connection();
   try {
-    await requireAdmin();
+    await requireAdminPermission("view_platform_analytics");
 
     const db = await getDatabase();
     const users = db.collection("users");
@@ -179,6 +179,13 @@ export async function GET() {
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
