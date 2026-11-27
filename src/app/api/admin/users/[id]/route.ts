@@ -185,7 +185,6 @@ export async function PATCH(
             updatedAt: new Date(),
           },
           ...(status === "disabled" ? { $inc: { sessionVersion: 1 } } : {}),
-          },
         },
         {
           returnDocument: "after",
