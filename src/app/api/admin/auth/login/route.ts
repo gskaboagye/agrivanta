@@ -7,6 +7,7 @@ import {
   type AdminUser,
 } from "@/lib/admin-auth";
 import { isAdminRole } from "@/lib/admin-permissions";
+import { consumeRateLimit, getRequestClientAddress } from "@/lib/rate-limit";
 
 type AdminDocument = {
   _id: import("mongodb").ObjectId;
@@ -20,6 +21,23 @@ type AdminDocument = {
 
 export async function POST(request: Request) {
   try {
+    const origin = request.headers.get("origin");
+    if (origin && origin !== new URL(request.url).origin) {
+      return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
+    }
+
+    const ipLimit = await consumeRateLimit({
+      scope: "administrator-login-ip",
+      identifier: getRequestClientAddress(request),
+      limit: 20,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { message: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } }
+      );
+    }
     let body: unknown;
 
     try {
@@ -57,6 +75,19 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: "Enter a valid email address and password." },
         { status: 400 }
+      );
+    }
+
+    const accountLimit = await consumeRateLimit({
+      scope: "administrator-login-account",
+      identifier: email,
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!accountLimit.allowed) {
+      return NextResponse.json(
+        { message: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(accountLimit.retryAfterSeconds) } }
       );
     }
 
