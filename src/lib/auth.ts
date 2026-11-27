@@ -214,6 +214,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           phone: 1,
           role: 1,
           status: 1,
+          disabled: 1,
           sessionVersion: 1,
         },
       }
