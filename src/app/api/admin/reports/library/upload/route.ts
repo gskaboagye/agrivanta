@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 import cloudinary from "@/lib/cloudinary";
 
 const MAX_PDF_SIZE = 20 * 1024 * 1024;
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await requireAdmin();
+    await requireAdminPermission("manage_agricultural_reports");
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -119,6 +119,13 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
