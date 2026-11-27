@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 
 const ALLOWED_TYPES = [
   "product",
@@ -76,7 +76,7 @@ function serializeListing(listing: Record<string, unknown>) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_listings");
 
     const params = request.nextUrl.searchParams;
 
@@ -182,6 +182,13 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
@@ -203,7 +210,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminPermission("manage_listings");
 
     let body: Record<string, unknown>;
 
@@ -330,6 +337,13 @@ export async function PATCH(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
