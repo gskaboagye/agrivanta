@@ -1,4 +1,5 @@
 import { ObjectId } from "mongodb";
+import { consumeRateLimit, getRequestClientAddress } from "@/lib/rate-limit";
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { getDatabase, getMongoClient } from "@/lib/mongodb";
@@ -11,6 +12,21 @@ import {
 
 export async function POST(request: NextRequest) {
   await connection();
+
+  try {
+    const requestLimit = await consumeRateLimit({
+      scope: "password-reset-ip",
+      identifier: getRequestClientAddress(request),
+      limit: 8,
+      windowMs: 900000,
+    });
+    if (!requestLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(requestLimit.retryAfterSeconds) } }
+      );
+    }
+
 
   const origin = request.headers.get("origin");
   const requestOrigin = new URL(request.url).origin;
