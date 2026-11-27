@@ -99,6 +99,8 @@ export async function POST(request: NextRequest) {
           {
             _id: userId,
             accountVerified: true,
+            status: { $ne: "disabled" },
+            status: { $ne: "disabled" },
             disabled: { $ne: true },
           },
           { session, projection: { _id: 1 } }
