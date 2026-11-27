@@ -5,6 +5,7 @@ import {
   ACCOUNT_ROLES,
   createSession,
   verifyPassword,
+  isAccountDisabled,
   type AccountRole,
   type AuthUser,
 } from "@/lib/auth";
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (user.status === "disabled") {
+    if (isAccountDisabled(user)) {
       return NextResponse.json(
         {
           success: false,
