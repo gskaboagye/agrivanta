@@ -1,6 +1,6 @@
 import { connection, NextResponse } from "next/server";
 import { ACCOUNT_ROLES, type AccountRole } from "@/lib/auth";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdminPermission } from "@/lib/admin-auth";
 import { getDatabase } from "@/lib/mongodb";
 
 const PAGE_SIZE = 20;
@@ -25,7 +25,7 @@ function escapeRegex(value: string) {
 export async function GET(request: Request) {
   await connection();
   try {
-    await requireAdmin();
+    await requireAdminPermission("manage_users");
 
     const { searchParams } = new URL(request.url);
 
@@ -123,6 +123,13 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ADMIN_FORBIDDEN") {
+      return NextResponse.json(
+        { success: false, message: "You do not have permission to perform this action." },
+        { status: 403 }
+      );
+    }
+
     if (
       error instanceof Error &&
       error.message === "ADMIN_UNAUTHORIZED"
