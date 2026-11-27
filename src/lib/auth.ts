@@ -16,8 +16,14 @@ export const ACCOUNT_ROLES = [
 
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
-export function isAccountDisabled(user: { status?: unknown; disabled?: unknown } | null | undefined): boolean {
-  return user?.status === "disabled" || user?.disabled === true;
+export function isAccountDisabled(user: unknown): boolean {
+  if (!user || typeof user !== "object") {
+    return false;
+  }
+
+  const account = user as { status?: unknown; disabled?: unknown };
+
+  return account.status === "disabled" || account.disabled === true;
 }
 
 export type AuthUser = {
