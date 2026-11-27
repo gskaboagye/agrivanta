@@ -1,5 +1,6 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 import { getDatabase, getMongoClient } from "@/lib/mongodb";
+import { isAccountDisabled } from "@/lib/auth";
 import {
   AUTH_OTP_CHANNELS,
   AUTH_OTP_MAX_ATTEMPTS,
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user.status === "disabled") {
+    if (isAccountDisabled(user)) {
       return NextResponse.json(
         {
           success: false,
@@ -307,6 +308,7 @@ export async function POST(request: NextRequest) {
               _id: user._id,
               accountVerified: true,
               status: { $ne: "disabled" },
+              disabled: { $ne: true },
             },
             { session }
           );
