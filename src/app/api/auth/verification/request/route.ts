@@ -1,5 +1,6 @@
 ﻿import { connection, NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
+import { isAccountDisabled } from "@/lib/auth";
 import { sendAuthVerificationEmail } from "@/lib/email";
 import { sendSms } from "@/lib/sms";
 import {
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (user.status === "disabled") {
+    if (isAccountDisabled(user)) {
       return NextResponse.json({
         success: true,
         message: "If the account and selected contact method are eligible, a code will be sent.",
