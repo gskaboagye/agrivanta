@@ -10,9 +10,28 @@ import {
 } from "@/lib/auth";
 
 import { emailSchema } from "@/lib/validation";
+import { consumeRateLimit, getRequestClientAddress } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const origin = request.headers.get("origin");
+    if (origin && origin !== new URL(request.url).origin) {
+      return NextResponse.json({ success: false, message: "Invalid request origin." }, { status: 403 });
+    }
+
+    const clientAddress = getRequestClientAddress(request);
+    const ipLimit = await consumeRateLimit({
+      scope: "user-login-ip",
+      identifier: clientAddress,
+      limit: 30,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } }
+      );
+    }
     let body: unknown;
 
     try {
@@ -59,6 +78,19 @@ export async function POST(request: Request) {
           message: "Enter a valid email and password.",
         },
         { status: 400 }
+      );
+    }
+
+    const accountLimit = await consumeRateLimit({
+      scope: "user-login-account",
+      identifier: email,
+      limit: 8,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!accountLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(accountLimit.retryAfterSeconds) } }
       );
     }
 
